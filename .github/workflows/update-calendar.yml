@@ -18,6 +18,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,43 +29,59 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Závislosti
+      - name: Instalace zavislosti
         run: pip install -r requirements.txt
 
-      - name: Sestavit events.json
+      - name: Build events
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
-          GOOGLE_SHEET_XLSX_URL: ${{ vars.GOOGLE_SHEET_XLSX_URL }}
         run: python scripts/build_events.py
 
-      - name: Poslat události do Cloudflare D1 přes Worker
-        if: ${{ secrets.CALENDAR_API_BASE != '' && secrets.CALENDAR_IMPORT_TOKEN != '' }}
+      - name: Upload events to Cloudflare
         env:
-          API_BASE: ${{ secrets.CALENDAR_API_BASE }}
-          IMPORT_TOKEN: ${{ secrets.CALENDAR_IMPORT_TOKEN }}
+          API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
+          IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          events = json.loads(Path('data/events.json').read_text(encoding='utf-8'))
-          imported = [e for e in events if e.get('source', {}).get('type') in {'excel','pdf','ical'}]
-          Path('/tmp/import.json').write_text(json.dumps({'events': imported}, ensure_ascii=False), encoding='utf-8')
-          print(f'K odeslání: {len(imported)} událostí')
+
+          events = json.loads(
+              Path("data/events.json").read_text(encoding="utf-8")
+          )
+
+          imported = [
+              e for e in events
+              if e.get("source", {}).get("type") in {"excel", "pdf", "ical"}
+          ]
+
+          Path("/tmp/import.json").write_text(
+              json.dumps(
+                  {"events": imported},
+                  ensure_ascii=False
+              ),
+              encoding="utf-8"
+          )
+
+          print(f"K odeslani: {len(imported)} udalosti")
           PY
+
           curl --fail-with-body --retry 3 \
             -H "Authorization: Bearer $IMPORT_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @/tmp/import.json \
             "$API_BASE/api/import"
 
-      - name: Commit statické kopie events.json
+      - name: Commit events.json
         run: |
           if git diff --quiet -- data/events.json; then
-            echo "Beze změn."
+            echo "Beze zmen."
             exit 0
           fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/events.json
-          git commit -m "Automatická aktualizace kalendáře"
+          git commit -m "Automaticka aktualizace kalendare"
           git push
