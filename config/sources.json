@@ -1,0 +1,16 @@
+{
+  "excel": {
+    "path": "sources/Brnensky_pohar_2026_27.xlsx",
+    "sheet": "Rozpis",
+    "competition": "Brněnský pohár",
+    "location": "Curling Brno"
+  },
+  "pdf": {
+    "path": "sources/MCR_divize_2627.pdf",
+    "competition": "MČR mužů a žen 2026/27 – divize"
+  },
+  "ical": {
+    "name": "Curling Brno EOS",
+    "urlFromEnvironment": "ICAL_URL"
+  }
+}

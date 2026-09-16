@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "id": "adam",
+      "name": "Adam",
+      "pin": "1234",
+      "canManageTrainings": true
+    },
+    {
+      "id": "nikolas",
+      "name": "Nikolas",
+      "pin": "2345",
+      "canManageTrainings": true
+    },
+    {
+      "id": "dominik",
+      "name": "Dominik",
+      "pin": "3456",
+      "canManageTrainings": true
+    },
+    {
+      "id": "petr",
+      "name": "Petr",
+      "pin": "4567",
+      "canManageTrainings": true
+    },
+    {
+      "id": "vojta",
+      "name": "Vojta",
+      "pin": "5678",
+      "canManageTrainings": true
+    },
+    {
+      "id": "lukas",
+      "name": "Lukáš",
+      "pin": "6789",
+      "canManageTrainings": true
+    }
+  ]
+}

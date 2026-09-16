@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>CB BUTchers – kalendář</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Curling • CB BUTchers</p>
+      <h1 id="site-title">Kalendář týmu</h1>
+    </div>
+    <div class="top-actions">
+      <span id="login-state" class="login-state">Nepřihlášen</span>
+      <button id="login-btn" class="button secondary">Přihlásit</button>
+      <button id="logout-btn" class="button secondary hidden">Odhlásit</button>
+      <button id="add-training-btn" class="button primary hidden">+ Přidat trénink</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel calendar-panel">
+      <div class="calendar-toolbar">
+        <div class="calendar-nav">
+          <button id="prev-month" class="icon-button" aria-label="Předchozí měsíc">‹</button>
+          <button id="today-btn" class="button secondary small">Dnes</button>
+          <button id="next-month" class="icon-button" aria-label="Další měsíc">›</button>
+        </div>
+        <h2 id="month-title"></h2>
+        <div class="filters" aria-label="Filtry kalendáře">
+          <label><input type="checkbox" value="excel" checked /> Pohár</label>
+          <label><input type="checkbox" value="pdf" checked /> MČR</label>
+          <label><input type="checkbox" value="ical" checked /> iCal</label>
+          <label><input type="checkbox" value="manual" checked /> Tréninky</label>
+        </div>
+      </div>
+
+      <div class="weekdays" aria-hidden="true">
+        <span>Po</span><span>Út</span><span>St</span><span>Čt</span><span>Pá</span><span>So</span><span>Ne</span>
+      </div>
+      <div id="calendar" class="calendar-grid" aria-live="polite"></div>
+    </section>
+
+    <aside class="panel sidebar">
+      <div class="sidebar-head">
+        <div>
+          <p class="eyebrow">Přehled</p>
+          <h2>Nejbližší události</h2>
+        </div>
+        <span id="event-count" class="badge"></span>
+      </div>
+      <div id="upcoming-list" class="upcoming-list"></div>
+
+      <div class="legend">
+        <h3>Legenda</h3>
+        <div><span class="dot source-excel"></span> Brněnský pohár</div>
+        <div><span class="dot source-pdf"></span> MČR / divize</div>
+        <div><span class="dot source-ical"></span> iCal</div>
+        <div><span class="dot source-manual"></span> Ruční trénink</div>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="event-dialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <button class="modal-close" value="cancel" aria-label="Zavřít">×</button>
+      <p id="event-source" class="eyebrow"></p>
+      <h2 id="event-title"></h2>
+      <div id="event-meta" class="event-meta"></div>
+      <p id="event-description" class="event-description"></p>
+
+      <section id="attendance-section" class="attendance-section hidden">
+        <div class="section-title-row">
+          <h3>Účast</h3>
+          <span id="attendance-summary" class="small-muted"></span>
+        </div>
+        <div id="attendance-list" class="attendance-list"></div>
+      </section>
+
+      <div id="event-actions" class="modal-actions"></div>
+    </form>
+  </dialog>
+
+  <dialog id="login-dialog" class="modal">
+    <form id="login-form" class="modal-card">
+      <button type="button" class="modal-close" data-close="login-dialog" aria-label="Zavřít">×</button>
+      <p class="eyebrow">Tým</p>
+      <h2>Přihlášení</h2>
+      <p class="helper">Vyber své jméno a zadej svůj PIN. GitHub účet není potřeba.</p>
+      <label class="field">Jméno
+        <select id="user-select" required><option value="">Vyber své jméno</option></select>
+      </label>
+      <label class="field">PIN
+        <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="current-password" required placeholder="••••" />
+      </label>
+      <p id="login-error" class="error"></p>
+      <div class="modal-actions"><button class="button primary" type="submit">Přihlásit</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="training-dialog" class="modal">
+    <form id="training-form" class="modal-card">
+      <button type="button" class="modal-close" data-close="training-dialog" aria-label="Zavřít">×</button>
+      <p class="eyebrow">Nová událost</p>
+      <h2>Přidat trénink</h2>
+      <div class="form-grid">
+        <label class="field">Datum<input id="training-date" type="date" required /></label>
+        <label class="field">Od<input id="training-start" type="time" required /></label>
+        <label class="field">Do<input id="training-end" type="time" /></label>
+        <label class="field">Dráha<input id="training-rink" type="text" placeholder="A / B / 1 / 2…" /></label>
+        <label class="field full">Místo<input id="training-location" type="text" value="Curling Brno" /></label>
+        <label class="field full">Poznámka<textarea id="training-description" rows="3"></textarea></label>
+      </div>
+      <p id="training-error" class="error"></p>
+      <div class="modal-actions"><button class="button primary" type="submit">Uložit trénink</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
