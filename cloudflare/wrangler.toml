@@ -11,3 +11,16 @@ ALLOWED_ORIGINS = "http://localhost:3000,http://10.0.1.16:3000,https://curlingca
 binding = "cb_butchers_calendar"
 database_name = "cb-butchers-calendar"
 database_id = "1e7c2c4e-edd3-4f79-ad27-20b9c8e602b3"
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
+
+
