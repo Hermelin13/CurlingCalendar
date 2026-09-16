@@ -11,6 +11,6 @@
   },
   "ical": {
     "name": "Curling Brno EOS",
-    "urlFromEnvironment": "ICAL_URL"
+    "urlFromEnvironment": "https://eos.curlingbrno.cz/server/ical?club=be5d7588-d713-42e9-b2b3-b474e195ad3d&p=eyJ0IjoibyIsInUiOjg4LCJtIjo5MCwiYyI6MTQ0OH0&signature=ba6756928cf9e548af1070ef44a504c5fee02023b2451a75d9f2c3aa0beb9268"
   }
 }
