@@ -140,6 +140,30 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
 .availability-strip.compact { gap:3px; }
 .availability-person { display:inline-grid; place-items:center; min-width:24px; height:24px; padding:0 5px; border-radius:999px; font-size:.62rem; font-weight:900; line-height:1; border:1px solid transparent; letter-spacing:-.02em; }
 .availability-strip.compact .availability-person { min-width:20px; height:20px; padding:0 4px; font-size:.55rem; }
+
+/* V seznamu nadcházejících událostí ukazujeme celá jména všech aktivních hráčů.
+   Počet se bere dynamicky z D1, takže funguje i při pozdějším rozšíření na 7–8 hráčů. */
+.availability-strip.full-names {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(72px, 1fr));
+  width:100%;
+  gap:5px;
+  margin-top:9px;
+}
+.availability-strip.full-names .availability-person {
+  min-width:0;
+  width:100%;
+  height:auto;
+  min-height:25px;
+  padding:5px 7px;
+  border-radius:7px;
+  font-size:.66rem;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.upcoming-item > span:last-child { min-width:0; }
 .status-yes { background:#e7f6eb; color:var(--yes); border-color:#a9dab6; }
 .status-maybe { background:#fff4d8; color:var(--maybe); border-color:#e9cb86; }
 .status-no { background:#fdebea; color:var(--no); border-color:#e6b1ad; }

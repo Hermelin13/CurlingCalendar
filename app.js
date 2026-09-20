@@ -81,11 +81,15 @@ function initials(name='') {
 function availabilityHtml(eventId, compact = true) {
   const rows = state.attendanceSummary[eventId] || [];
   if (!rows.length) return '';
-  const cls = compact ? 'availability-strip compact' : 'availability-strip';
+
+  const cls = compact ? 'availability-strip compact' : 'availability-strip full-names';
+
   return `<span class="${cls}" aria-label="Docházka">${rows.map(r => {
     const status = r.status || 'unknown';
     const label = status === 'yes' ? 'Ano' : status === 'maybe' ? 'Možná' : status === 'no' ? 'Ne' : 'Bez odpovědi';
-    return `<span class="availability-person status-${status}" title="${escapeHtml(r.name)}: ${label}">${escapeHtml(initials(r.name))}</span>`;
+    const text = compact ? initials(r.name) : r.name;
+
+    return `<span class="availability-person status-${status}" title="${escapeHtml(r.name)}: ${label}" aria-label="${escapeHtml(r.name)}: ${label}">${escapeHtml(text)}</span>`;
   }).join('')}</span>`;
 }
 
