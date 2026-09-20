@@ -16,6 +16,8 @@
     <div class="top-actions">
       <span id="login-state" class="login-state">Nepřihlášen</span>
       <button id="login-btn" class="button secondary">Přihlásit</button>
+      <button id="export-btn" class="button secondary">Export .ics</button>
+      <button id="change-pin-btn" class="button secondary hidden">Změnit PIN</button>
       <button id="logout-btn" class="button secondary hidden">Odhlásit</button>
       <button id="add-training-btn" class="button primary hidden">+ Přidat trénink</button>
     </div>
@@ -89,7 +91,7 @@
       <button type="button" class="modal-close" data-close="login-dialog" aria-label="Zavřít">×</button>
       <p class="eyebrow">Tým</p>
       <h2>Přihlášení</h2>
-      <p class="helper">Vyber své jméno a zadej svůj PIN.</p>
+      <p class="helper">Vyber své jméno a zadej svůj PIN. GitHub účet není potřeba.</p>
       <label class="field">Jméno
         <select id="user-select" required><option value="">Vyber své jméno</option></select>
       </label>
@@ -98,6 +100,27 @@
       </label>
       <p id="login-error" class="error"></p>
       <div class="modal-actions"><button class="button primary" type="submit">Přihlásit</button></div>
+    </form>
+  </dialog>
+
+
+  <dialog id="change-pin-dialog" class="modal">
+    <form id="change-pin-form" class="modal-card">
+      <button type="button" class="modal-close" data-close="change-pin-dialog" aria-label="Zavřít">×</button>
+      <p class="eyebrow">Účet</p>
+      <h2>Změnit PIN</h2>
+      <p class="helper">PIN musí mít 4 až 12 číslic. Změna se týká pouze tvého účtu.</p>
+      <label class="field">Současný PIN
+        <input id="current-pin-input" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="current-password" required />
+      </label>
+      <label class="field">Nový PIN
+        <input id="new-pin-input" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="new-password" required />
+      </label>
+      <label class="field">Nový PIN znovu
+        <input id="new-pin-confirm-input" type="password" inputmode="numeric" pattern="[0-9]{4,12}" autocomplete="new-password" required />
+      </label>
+      <p id="change-pin-error" class="error"></p>
+      <div class="modal-actions"><button class="button primary" type="submit">Uložit nový PIN</button></div>
     </form>
   </dialog>
 

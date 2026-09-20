@@ -134,3 +134,21 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
 }
 .field select { width: 100%; border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 10px; padding: 10px; font-weight: 500; }
 @media (prefers-color-scheme: dark) { .field select { background:#111721; color:var(--text); } }
+
+/* Přehled docházky přímo v kalendáři */
+.availability-strip { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; align-items:center; }
+.availability-strip.compact { gap:3px; }
+.availability-person { display:inline-grid; place-items:center; min-width:24px; height:24px; padding:0 5px; border-radius:999px; font-size:.62rem; font-weight:900; line-height:1; border:1px solid transparent; letter-spacing:-.02em; }
+.availability-strip.compact .availability-person { min-width:20px; height:20px; padding:0 4px; font-size:.55rem; }
+.status-yes { background:#e7f6eb; color:var(--yes); border-color:#a9dab6; }
+.status-maybe { background:#fff4d8; color:var(--maybe); border-color:#e9cb86; }
+.status-no { background:#fdebea; color:var(--no); border-color:#e6b1ad; }
+.status-unknown { background:#eef1f5; color:#7b8492; border-color:#d6dce4; }
+.upcoming-item .availability-strip { margin-top:8px; }
+.event-chip .availability-strip { pointer-events:none; }
+@media (prefers-color-scheme: dark) {
+  .status-yes { background:#173a24; color:#9de0ad; border-color:#2e6540; }
+  .status-maybe { background:#4a3513; color:#ffd48b; border-color:#785722; }
+  .status-no { background:#4a211f; color:#ffb0aa; border-color:#7a3732; }
+  .status-unknown { background:#252d39; color:#b4bdca; border-color:#3b4655; }
+}

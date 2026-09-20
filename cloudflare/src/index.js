@@ -24,11 +24,19 @@ export default {
         if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
         return json({ user: publicUser(auth.user) }, 200, cors.headers);
       }
+      if (url.pathname === '/api/change-pin' && request.method === 'POST') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        return changePin(request, env, auth.user, cors.headers);
+      }
       if (url.pathname === '/api/events' && request.method === 'GET') {
         return listEvents(env, cors.headers);
       }
       if (url.pathname === '/api/attendance' && request.method === 'GET') {
         return getAttendance(url, env, cors.headers);
+      }
+      if (url.pathname === '/api/attendance-summary' && request.method === 'GET') {
+        return getAttendanceSummary(env, cors.headers);
       }
       if (url.pathname === '/api/attendance' && request.method === 'PUT') {
         const auth = await requireUser(request, env);
@@ -88,8 +96,14 @@ function publicUser(u) {
   return { id: u.id, name: u.name, canManageTrainings: Boolean(u.can_manage_trainings) };
 }
 
+function db(env) {
+  const database = env.DB || env.cb_butchers_calendar;
+  if (!database) throw new Error('Chybí D1 binding (DB / cb_butchers_calendar).');
+  return database;
+}
+
 async function listUsers(env, headers) {
-  const { results } = await env.cb_butchers_calendar.prepare('SELECT id, name, can_manage_trainings FROM users WHERE active=1 ORDER BY name').all();
+  const { results } = await db(env).prepare('SELECT id, name, can_manage_trainings FROM users WHERE active=1 ORDER BY name').all();
   return json({ users: results.map(publicUser) }, 200, headers);
 }
 
@@ -98,7 +112,7 @@ async function login(request, env, headers) {
   const userId = String(body.userId || '').trim();
   const pin = String(body.pin || '');
   if (!userId || !/^\d{4,12}$/.test(pin)) return json({ error: 'Vyber uživatele a zadej PIN.' }, 400, headers);
-  const user = await env.cb_butchers_calendar.prepare('SELECT * FROM users WHERE id=? AND active=1').bind(userId).first();
+  const user = await db(env).prepare('SELECT * FROM users WHERE id=? AND active=1').bind(userId).first();
   if (!user) return json({ error: 'Neplatné jméno nebo PIN.' }, 401, headers);
   const hash = await hashPin(pin, user.pin_salt, env.PIN_PEPPER);
   if (!timingSafeEqual(hash, user.pin_hash)) return json({ error: 'Neplatné jméno nebo PIN.' }, 401, headers);
@@ -106,18 +120,36 @@ async function login(request, env, headers) {
   return json({ token, user: publicUser(user) }, 200, headers);
 }
 
+async function changePin(request, env, authUser, headers) {
+  const body = await readJson(request);
+  const currentPin = String(body.currentPin || '');
+  const newPin = String(body.newPin || '');
+  if (!/^\d{4,12}$/.test(currentPin) || !/^\d{4,12}$/.test(newPin)) {
+    return json({ error: 'PIN musí mít 4 až 12 číslic.' }, 400, headers);
+  }
+  if (currentPin === newPin) return json({ error: 'Nový PIN musí být jiný než současný.' }, 400, headers);
+  const user = await db(env).prepare('SELECT id, pin_salt, pin_hash FROM users WHERE id=? AND active=1').bind(authUser.id).first();
+  if (!user) return json({ error: 'Uživatel neexistuje.' }, 404, headers);
+  const currentHash = await hashPin(currentPin, user.pin_salt, env.PIN_PEPPER);
+  if (!timingSafeEqual(currentHash, user.pin_hash)) return json({ error: 'Současný PIN není správný.' }, 401, headers);
+  const salt = crypto.randomUUID();
+  const hash = await hashPin(newPin, salt, env.PIN_PEPPER);
+  await db(env).prepare('UPDATE users SET pin_salt=?, pin_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(salt, hash, authUser.id).run();
+  return json({ ok: true }, 200, headers);
+}
+
 async function requireUser(request, env) {
   const token = bearerToken(request);
   if (!token) return { error: 'Nejdřív se přihlas.', status: 401 };
   const payload = await verifySession(token, env.SESSION_SECRET);
   if (!payload?.sub) return { error: 'Přihlášení vypršelo. Přihlas se znovu.', status: 401 };
-  const user = await env.cb_butchers_calendar.prepare('SELECT id, name, can_manage_trainings, active FROM users WHERE id=?').bind(payload.sub).first();
+  const user = await db(env).prepare('SELECT id, name, can_manage_trainings, active FROM users WHERE id=?').bind(payload.sub).first();
   if (!user || !user.active) return { error: 'Uživatel není aktivní.', status: 401 };
   return { user };
 }
 
 async function listEvents(env, headers) {
-  const { results } = await env.cb_butchers_calendar.prepare('SELECT payload_json FROM events ORDER BY date, COALESCE(start_time, ""), id').all();
+  const { results } = await db(env).prepare('SELECT payload_json FROM events ORDER BY date, COALESCE(start_time, ""), id').all();
   const events = results.map(r => JSON.parse(r.payload_json));
   return json({ events }, 200, headers);
 }
@@ -125,9 +157,9 @@ async function listEvents(env, headers) {
 async function getAttendance(url, env, headers) {
   const eventId = url.searchParams.get('eventId');
   if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
-  const event = await env.cb_butchers_calendar.prepare('SELECT attendance_enabled FROM events WHERE id=?').bind(eventId).first();
+  const event = await db(env).prepare('SELECT attendance_enabled FROM events WHERE id=?').bind(eventId).first();
   if (!event) return json({ error: 'Událost neexistuje.' }, 404, headers);
-  const { results } = await env.cb_butchers_calendar.prepare(`
+  const { results } = await db(env).prepare(`
     SELECT u.id, u.name, a.status, a.updated_at
     FROM users u
     LEFT JOIN attendance a ON a.user_id=u.id AND a.event_id=?
@@ -137,14 +169,31 @@ async function getAttendance(url, env, headers) {
   return json({ attendance: results }, 200, headers);
 }
 
+async function getAttendanceSummary(env, headers) {
+  const { results } = await db(env).prepare(`
+    SELECT e.id AS event_id, u.id AS user_id, u.name, a.status
+    FROM events e
+    CROSS JOIN users u
+    LEFT JOIN attendance a ON a.event_id=e.id AND a.user_id=u.id
+    WHERE e.attendance_enabled=1 AND u.active=1
+    ORDER BY e.date, e.start_time, u.name
+  `).all();
+  const events = {};
+  for (const row of results) {
+    if (!events[row.event_id]) events[row.event_id] = [];
+    events[row.event_id].push({ id: row.user_id, name: row.name, status: row.status || null });
+  }
+  return json({ events }, 200, headers);
+}
+
 async function saveAttendance(request, env, user, headers) {
   const body = await readJson(request);
   const eventId = String(body.eventId || '').trim();
   const status = String(body.status || '').trim();
   if (!eventId || !['yes','maybe','no'].includes(status)) return json({ error: 'Neplatná odpověď.' }, 400, headers);
-  const event = await env.cb_butchers_calendar.prepare('SELECT attendance_enabled FROM events WHERE id=?').bind(eventId).first();
+  const event = await db(env).prepare('SELECT attendance_enabled FROM events WHERE id=?').bind(eventId).first();
   if (!event || !event.attendance_enabled) return json({ error: 'U této události není docházka povolena.' }, 400, headers);
-  await env.cb_butchers_calendar.prepare(`
+  await db(env).prepare(`
     INSERT INTO attendance(event_id,user_id,status,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
   `).bind(eventId, user.id, status).run();
@@ -181,12 +230,12 @@ async function addTraining(request, env, user, headers) {
 }
 
 async function deleteTraining(id, env, headers) {
-  const row = await env.cb_butchers_calendar.prepare('SELECT source_type FROM events WHERE id=?').bind(id).first();
+  const row = await db(env).prepare('SELECT source_type FROM events WHERE id=?').bind(id).first();
   if (!row) return json({ error: 'Trénink neexistuje.' }, 404, headers);
   if (row.source_type !== 'manual') return json({ error: 'Mazat lze jen ručně přidané tréninky.' }, 400, headers);
-  await env.cb_butchers_calendar.batch([
-    env.cb_butchers_calendar.prepare('DELETE FROM attendance WHERE event_id=?').bind(id),
-    env.cb_butchers_calendar.prepare('DELETE FROM events WHERE id=?').bind(id)
+  await db(env).batch([
+    db(env).prepare('DELETE FROM attendance WHERE event_id=?').bind(id),
+    db(env).prepare('DELETE FROM events WHERE id=?').bind(id)
   ]);
   return json({ ok: true }, 200, headers);
 }
@@ -196,9 +245,9 @@ async function importEvents(request, env, headers) {
   const events = Array.isArray(body) ? body : body.events;
   if (!Array.isArray(events)) return json({ error: 'Očekávám pole events.' }, 400, headers);
   const cleanEvents = events.filter(e => importedSources.has(e?.source?.type) && e.id && e.date);
-  await env.cb_butchers_calendar.prepare("DELETE FROM events WHERE source_type IN ('excel','pdf','ical')").run();
+  await db(env).prepare("DELETE FROM events WHERE source_type IN ('excel','pdf','ical')").run();
   for (let i = 0; i < cleanEvents.length; i += 50) {
-    await env.cb_butchers_calendar.batch(cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e)));
+    await db(env).batch(cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e)));
   }
   return json({ ok: true, imported: cleanEvents.length }, 200, headers);
 }
@@ -215,14 +264,14 @@ async function upsertUsers(request, env, headers) {
     if (!/^[a-z0-9_-]{2,40}$/.test(id) || !name || !/^\d{4,12}$/.test(pin)) return json({ error: `Neplatný uživatel: ${name || id}` }, 400, headers);
     const salt = crypto.randomUUID();
     const hash = await hashPin(pin, salt, env.PIN_PEPPER);
-    statements.push(env.cb_butchers_calendar.prepare(`
+    statements.push(db(env).prepare(`
       INSERT INTO users(id,name,pin_salt,pin_hash,can_manage_trainings,active,updated_at)
       VALUES(?,?,?,?,?,1,CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name,pin_salt=excluded.pin_salt,pin_hash=excluded.pin_hash,
         can_manage_trainings=excluded.can_manage_trainings,active=1,updated_at=CURRENT_TIMESTAMP
     `).bind(id, name, salt, hash, u.canManageTrainings ? 1 : 0));
   }
-  await env.cb_butchers_calendar.batch(statements);
+  await db(env).batch(statements);
   return json({ ok: true, users: users.length }, 200, headers);
 }
 
@@ -231,7 +280,7 @@ async function storeEvent(env, event) {
 }
 
 function eventStatement(env, e) {
-  return env.cb_butchers_calendar.prepare(`
+  return db(env).prepare(`
     INSERT INTO events(id,source_type,date,start_time,payload_json,editable,attendance_enabled,updated_at)
     VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(id) DO UPDATE SET source_type=excluded.source_type,date=excluded.date,start_time=excluded.start_time,
