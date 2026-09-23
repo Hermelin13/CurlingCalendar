@@ -220,6 +220,28 @@
     "attendanceEnabled": true
   },
   {
+    "id": "ical-47850ae4a647",
+    "type": "event",
+    "title": "Nebuď lama! tým jako celek a fungování jednotlivých hráčů v týmu",
+    "team": "CB BUTchers",
+    "opponent": null,
+    "date": "2026-10-15",
+    "startTime": "18:00",
+    "endTime": "20:00",
+    "allDay": false,
+    "location": "Posilka, Lazaretní 9, 615 00 Brno-Židenice, Česko",
+    "rink": null,
+    "competition": null,
+    "description": null,
+    "source": {
+      "type": "ical",
+      "name": "Curling Brno EOS",
+      "url": null
+    },
+    "editable": false,
+    "attendanceEnabled": true
+  },
+  {
     "id": "excel-991ad68ed3a3",
     "type": "match",
     "title": "CB BUTchers vs CB juniorky",
