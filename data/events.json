@@ -188,7 +188,7 @@
     "location": "Brno hala, Lazaretní 9, 615 00 Brno-Židenice, Česko",
     "rink": null,
     "competition": null,
-    "description": "přihláška: https://eos.curlingbrno.cz/signups/01kysjk8z9psamgebfjh83e3qt",
+    "description": "registrace hráčů 8:00 - 8:30\nprvní zápas 9:00",
     "source": {
       "type": "ical",
       "name": "Curling Brno EOS",
@@ -475,6 +475,28 @@
     "rink": null,
     "competition": null,
     "description": "přihlášky zde: https://curlingbrno.cz/brunnslam-md-2026/",
+    "source": {
+      "type": "ical",
+      "name": "Curling Brno EOS",
+      "url": null
+    },
+    "editable": false,
+    "attendanceEnabled": true
+  },
+  {
+    "id": "ical-5a55b5a9570b",
+    "type": "event",
+    "title": "APOLLO workshop #3: Technika 2.0",
+    "team": "CB BUTchers",
+    "opponent": null,
+    "date": "2026-11-28",
+    "startTime": "08:45",
+    "endTime": "14:00",
+    "allDay": false,
+    "location": "Brno hala, Lazaretní 9, 615 00 Brno-Židenice, Česko",
+    "rink": null,
+    "competition": null,
+    "description": null,
     "source": {
       "type": "ical",
       "name": "Curling Brno EOS",
