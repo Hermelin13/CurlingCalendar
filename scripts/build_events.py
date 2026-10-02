@@ -57,81 +57,231 @@ def base_event(*, event_id, event_type, title, date_str, start_time=None, end_ti
 
 def parse_google_sheet(cfg: dict) -> list[dict]:
     """
-    Načte konkrétní list Google Sheets přímo jako CSV.
-    Není potřeba editace dokumentu ani Google API credentials.
-    Dokument musí být dostupný přes odkaz tak, aby ho GitHub Actions mohl stáhnout.
+    Načte rozpis z Google Sheets jako CSV a hledá zápasy CB BUTchers.
+
+    Parser není závislý na přesné pozici sloupců. To je důležité, protože
+    Google CSV může merged buňky exportovat trochu jinak než původní XLSX.
     """
-    url = cfg["csvUrl"]
-    response = requests.get(url, timeout=45, allow_redirects=True)
-    response.raise_for_status()
+    urls = [
+        cfg.get("csvUrl"),
+        cfg.get("fallbackCsvUrl"),
+    ]
+    urls = [u for u in urls if u]
 
-    content_type = (response.headers.get("content-type") or "").lower()
-    text = response.text
+    last_error = None
+    rows = None
 
-    # Když Google místo CSV vrátí přihlašovací HTML, raději import ukončíme
-    # a zachováme poslední data z events.json.
-    if "text/html" in content_type or "<html" in text[:500].lower():
-        raise RuntimeError(
-            "Google Sheet není pro GitHub Actions veřejně čitelný. "
-            "Nastav sdílení na „Kdokoli s odkazem – prohlížející“."
-        )
+    for url in urls:
+        try:
+            response = requests.get(url, timeout=45, allow_redirects=True)
+            response.raise_for_status()
 
-    rows = list(csv.reader(io.StringIO(text)))
-    current_date = None
+            content_type = (response.headers.get("content-type") or "").lower()
+            text = response.text
+
+            if "text/html" in content_type or "<html" in text[:500].lower():
+                raise RuntimeError(
+                    "Google místo CSV vrátil HTML. Dokument nejspíš není "
+                    "dostupný bez přihlášení."
+                )
+
+            rows = list(csv.reader(io.StringIO(text)))
+            if rows:
+                print(
+                    f"Google CSV: {len(rows)} řádků, "
+                    f"max {max((len(r) for r in rows), default=0)} sloupců"
+                )
+                break
+        except Exception as exc:
+            last_error = exc
+            rows = None
+
+    if rows is None:
+        raise RuntimeError(f"Google Sheet se nepodařilo načíst: {last_error}")
+
     out = []
 
-    def cell(row, index):
-        if index >= len(row):
+    def cell(row_index: int, col_index: int) -> str:
+        if row_index < 0 or row_index >= len(rows):
             return ""
-        return str(row[index] or "").strip()
+        row = rows[row_index]
+        if col_index < 0 or col_index >= len(row):
+            return ""
+        return str(row[col_index] or "").strip()
 
-    def parse_header_date(value):
+    def parse_date_value(value: str):
         text = str(value or "").strip()
-        m = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})", text)
-        if m:
-            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        try:
-            return date_parser.parse(text, dayfirst=True).date()
-        except Exception:
+        if not text:
             return None
 
-    row = 0
-    while row < len(rows):
-        col_a = cell(rows[row], 0)
-        col_b = cell(rows[row], 1)
+        # 14.10.2026 / 14. 10. 2026 / "14.10.2026 - svátek"
+        m = re.search(r"(?<!\d)(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})(?!\d)", text)
+        if m:
+            try:
+                return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                return None
 
-        if norm(col_a) == norm("Dráha - Čas"):
-            current_date = parse_header_date(col_b)
-            row += 1
+        # 2026-10-14
+        m = re.search(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)", text)
+        if m:
+            try:
+                return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                return None
+
+        return None
+
+    def schedule_from_row(row_index: int):
+        """
+        Vrací (rink, HH:MM), ať je text např.:
+        A - 18:00, B–20:00, Dráha B - 20.00 apod.
+        """
+        row = rows[row_index]
+        for value in row:
+            text = str(value or "").strip()
+            if not text:
+                continue
+
+            m = re.search(
+                r"(?:dráha\s*)?([A-ZÁ-Ž]|\d+)\s*[-–—]\s*"
+                r"(\d{1,2})[:.](\d{2})",
+                text,
+                re.I,
+            )
+            if m:
+                rink = m.group(1).upper()
+                start = f"{int(m.group(2)):02d}:{m.group(3)}"
+                return rink, start
+        return None
+
+    def nearest_date(row_index: int):
+        # Datum bývá na hlavičce bloku několik řádků nad zápasem.
+        for r in range(row_index, max(-1, row_index - 25), -1):
+            for c in range(min(len(rows[r]), 6)):
+                parsed = parse_date_value(cell(r, c))
+                if parsed:
+                    return parsed
+        return None
+
+    team_hits = []
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            if norm(str(value or "")) == norm(TEAM):
+                team_hits.append((r, c))
+
+    print(f"Google CSV: nalezeno {len(team_hits)} buněk s týmem {TEAM!r}")
+
+    seen = set()
+
+    for r, c in team_hits:
+        # U běžného rozpisu je první tým na řádku s časem a druhý pod ním.
+        # Google export může ale merged buňky posunout, proto zkoušíme i okolí.
+        candidate_rows = [r, r - 1, r + 1, r - 2]
+        schedule_row = None
+        schedule = None
+
+        for rr in candidate_rows:
+            if 0 <= rr < len(rows):
+                found = schedule_from_row(rr)
+                if found:
+                    schedule_row = rr
+                    schedule = found
+                    break
+
+        if not schedule:
             continue
 
-        if re.match(r"^[AB]\s*-\s*\d{1,2}:\d{2}$", col_a, re.I):
-            team1 = col_b
-            team2 = cell(rows[row + 1], 1) if row + 1 < len(rows) else ""
+        rink, start = schedule
 
-            if current_date and (norm(team1) == norm(TEAM) or norm(team2) == norm(TEAM)):
-                rink, start = [x.strip() for x in col_a.split("-", 1)]
-                opponent = team2 if norm(team1) == norm(TEAM) else team1
-                d = current_date.isoformat()
+        # Najdi soupeře primárně ve stejném sloupci v páru řádků.
+        opponent = None
+        opponent_candidates = []
 
-                out.append(base_event(
-                    event_id=stable_id("excel", d, start, rink.upper(), opponent),
-                    event_type="match",
-                    title=f"{TEAM} vs {opponent}",
-                    date_str=d,
-                    start_time=start,
-                    location=cfg.get("location", "Curling Brno"),
-                    rink=rink.upper(),
-                    competition=cfg.get("competition", "Brněnský pohár"),
-                    source_type="excel",
-                    source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
-                    opponent=opponent,
-                ))
+        if r == schedule_row:
+            opponent_candidates += [cell(r + 1, c), cell(r - 1, c)]
+        else:
+            opponent_candidates += [cell(schedule_row, c), cell(schedule_row + 1, c)]
 
-            row += 2
+        # Fallback: projdi blízké buňky ve stejných dvou řádcích.
+        for rr in {schedule_row, schedule_row + 1, r - 1, r + 1}:
+            if 0 <= rr < len(rows):
+                for cc, value in enumerate(rows[rr]):
+                    if cc == c:
+                        continue
+                    opponent_candidates.append(str(value or "").strip())
+
+        def looks_like_team_name(value: str) -> bool:
+            value = str(value or "").strip()
+            if not value:
+                return False
+            if norm(value) == norm(TEAM):
+                return False
+            if parse_date_value(value):
+                return False
+            if re.search(r"\d{1,2}[:.]\d{2}", value):
+                return False
+            if re.fullmatch(r"\d+[.]?", value):
+                return False
+            bad = {
+                "dráha - čas", "dráha", "čas", "pořadí", "tým",
+                "body", "endy", "kameny", "skupina a", "skupina b"
+            }
+            if norm(value) in bad:
+                return False
+            # Názvy týmů obsahují písmeno; čísla/skóre samotná ne.
+            return bool(re.search(r"[A-Za-zÁ-ž]", value))
+
+        for candidate in opponent_candidates:
+            if looks_like_team_name(candidate):
+                opponent = candidate
+                break
+
+        d = nearest_date(schedule_row)
+        if not d or not opponent:
             continue
 
-        row += 1
+        date_str = d.isoformat()
+        dedupe_key = (date_str, start, rink, norm(opponent))
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        out.append(base_event(
+            event_id=stable_id("excel", date_str, start, rink, opponent),
+            event_type="match",
+            title=f"{TEAM} vs {opponent}",
+            date_str=date_str,
+            start_time=start,
+            location=cfg.get("location", "Curling Brno"),
+            rink=rink,
+            competition=cfg.get("competition", "Brněnský pohár"),
+            source_type="excel",  # zachová existující frontend filtr a ID namespace
+            source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
+            opponent=opponent,
+        ))
+
+    out.sort(key=lambda e: (e["date"], e.get("startTime") or "", e.get("rink") or ""))
+
+    if not out:
+        # Diagnostika do GitHub Actions logu: uvidíme přesně, jak Google CSV vypadá.
+        print("DIAGNOSTIKA: parser nenašel žádný zápas.")
+        print("Prvních 15 neprázdných řádků Google CSV:")
+        shown = 0
+        for i, row in enumerate(rows):
+            if any(str(v or "").strip() for v in row):
+                print(f"  ROW {i + 1}: {row[:12]}")
+                shown += 1
+                if shown >= 15:
+                    break
+
+        if team_hits:
+            print("Řádky kolem výskytu CB BUTchers:")
+            for r, c in team_hits[:12]:
+                lo = max(0, r - 1)
+                hi = min(len(rows), r + 2)
+                for rr in range(lo, hi):
+                    print(f"  ROW {rr + 1}: {rows[rr][:12]}")
 
     return out
 
