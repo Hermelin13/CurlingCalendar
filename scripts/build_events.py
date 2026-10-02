@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import os
 import re
@@ -53,37 +55,41 @@ def base_event(*, event_id, event_type, title, date_str, start_time=None, end_ti
     }
 
 
-def parse_schedule_rows(rows: list[list[object]], cfg: dict) -> list[dict]:
+def parse_google_sheet(cfg: dict) -> list[dict]:
     """
-    Parse the Brněnský pohár schedule from raw Google Sheets rows.
+    Načte konkrétní list Google Sheets přímo jako CSV.
+    Není potřeba editace dokumentu ani Google API credentials.
+    Dokument musí být dostupný přes odkaz tak, aby ho GitHub Actions mohl stáhnout.
+    """
+    url = cfg["csvUrl"]
+    response = requests.get(url, timeout=45, allow_redirects=True)
+    response.raise_for_status()
 
-    The parser intentionally mirrors the old XLSX parser:
-    - a date block starts with A == "Dráha - Čas"
-    - column B contains the date
-    - a match starts with e.g. "A - 18:00" / "B - 20:00"
-    - the two teams are in column B on two consecutive rows
-    """
+    content_type = (response.headers.get("content-type") or "").lower()
+    text = response.text
+
+    # Když Google místo CSV vrátí přihlašovací HTML, raději import ukončíme
+    # a zachováme poslední data z events.json.
+    if "text/html" in content_type or "<html" in text[:500].lower():
+        raise RuntimeError(
+            "Google Sheet není pro GitHub Actions veřejně čitelný. "
+            "Nastav sdílení na „Kdokoli s odkazem – prohlížející“."
+        )
+
+    rows = list(csv.reader(io.StringIO(text)))
     current_date = None
     out = []
 
     def cell(row, index):
         if index >= len(row):
             return ""
-        value = row[index]
-        return "" if value is None else str(value).strip()
+        return str(row[index] or "").strip()
 
     def parse_header_date(value):
-        if isinstance(value, datetime):
-            return value.date()
-        if isinstance(value, date):
-            return value
-
         text = str(value or "").strip()
         m = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})", text)
         if m:
             return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-
-        # Google Sheets may return ISO-like dates depending on cell formatting.
         try:
             return date_parser.parse(text, dayfirst=True).date()
         except Exception:
@@ -117,7 +123,7 @@ def parse_schedule_rows(rows: list[list[object]], cfg: dict) -> list[dict]:
                     location=cfg.get("location", "Curling Brno"),
                     rink=rink.upper(),
                     competition=cfg.get("competition", "Brněnský pohár"),
-                    source_type="excel",  # keep existing frontend filter / DB source type
+                    source_type="excel",
                     source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
                     opponent=opponent,
                 ))
@@ -128,34 +134,6 @@ def parse_schedule_rows(rows: list[list[object]], cfg: dict) -> list[dict]:
         row += 1
 
     return out
-
-
-def parse_google_sheet(webapp_url: str, secret: str, cfg: dict) -> list[dict]:
-    """
-    Reads the schedule through the Google Apps Script web app.
-    This keeps the spreadsheet private: GitHub Actions only knows a secret URL/token,
-    not Google credentials.
-    """
-    if not webapp_url or not secret:
-        raise RuntimeError("Chybí GOOGLE_SHEETS_WEBAPP_URL nebo GOOGLE_SHEETS_SYNC_SECRET.")
-
-    response = requests.get(
-        webapp_url,
-        params={"action": "schedule", "secret": secret},
-        timeout=45,
-        allow_redirects=True,
-    )
-    response.raise_for_status()
-
-    payload = response.json()
-    if not payload.get("ok"):
-        raise RuntimeError(payload.get("error") or "Google Sheets endpoint vrátil chybu.")
-
-    rows = payload.get("rows")
-    if not isinstance(rows, list):
-        raise RuntimeError("Google Sheets endpoint nevrátil pole rows.")
-
-    return parse_schedule_rows(rows, cfg)
 
 def _split_pdf_columns(words: list[dict], anchors: list[float]) -> dict[int, str]:
     bounds = [(anchors[i] + anchors[i + 1]) / 2 for i in range(len(anchors) - 1)]
@@ -305,16 +283,8 @@ def main():
     cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     existing = load_existing()
 
-    google_cfg = cfg.get("googleSheet", {})
-    google_webapp_url = os.getenv("GOOGLE_SHEETS_WEBAPP_URL", "").strip()
-    google_sync_secret = os.getenv("GOOGLE_SHEETS_SYNC_SECRET", "").strip()
-
     try:
-        excel_events = parse_google_sheet(
-            google_webapp_url,
-            google_sync_secret,
-            google_cfg,
-        )
+        excel_events = parse_google_sheet(cfg["googleSheet"])
         print(f"Google Sheets: {len(excel_events)} zápasů")
     except Exception as exc:
         print(f"VAROVÁNÍ: Google Sheets import selhal, zachovávám poslední data: {exc}")

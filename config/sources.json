@@ -1,8 +1,9 @@
 {
   "googleSheet": {
+    "name": "Brněnský pohár – Google Sheets",
     "spreadsheetId": "17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY",
     "gid": 116203339,
-    "name": "Brněnský pohár – Google Sheets",
+    "csvUrl": "https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/export?format=csv&gid=116203339",
     "competition": "Brněnský pohár",
     "location": "Curling Brno"
   },

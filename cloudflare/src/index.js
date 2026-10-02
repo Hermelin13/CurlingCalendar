@@ -165,7 +165,7 @@ async function listEvents(env, headers) {
   const { results } = await db(env).prepare(`
     SELECT e.payload_json, r.our_score, r.opponent_score, r.note, r.updated_at AS result_updated_at
     FROM events e
-    LEFT JOIN match_results r ON r.event_id=e.id
+           LEFT JOIN match_results r ON r.event_id=e.id
     ORDER BY e.date, COALESCE(e.start_time, ''), e.id
   `).all();
 
@@ -213,85 +213,25 @@ async function saveResult(request, env, user, headers) {
   await db(env).prepare(`
     INSERT INTO match_results(event_id,our_score,opponent_score,note,updated_by,updated_at)
     VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(event_id) DO UPDATE SET
+      ON CONFLICT(event_id) DO UPDATE SET
       our_score=excluded.our_score,
-      opponent_score=excluded.opponent_score,
-      note=excluded.note,
-      updated_by=excluded.updated_by,
-      updated_at=CURRENT_TIMESTAMP
+                                 opponent_score=excluded.opponent_score,
+                                 note=excluded.note,
+                                 updated_by=excluded.updated_by,
+                                 updated_at=CURRENT_TIMESTAMP
   `).bind(eventId, ourScore, opponentScore, note, user.id).run();
-
-  const googleSync = await syncResultToGoogle(env, {
-    action: 'setResult',
-    eventId,
-    date: event.date || null,
-    startTime: event.startTime || null,
-    rink: event.rink || null,
-    team: event.team || env.TEAM_NAME || 'CB BUTchers',
-    opponent: event.opponent || null,
-    competition: event.competition || null,
-    ourScore,
-    opponentScore,
-    note,
-    updatedBy: user.name || user.id
-  });
 
   return json({
     ok: true,
-    result: { ourScore, opponentScore, note },
-    googleSync
+    result: { ourScore, opponentScore, note }
   }, 200, headers);
 }
 
 async function deleteResult(url, env, headers) {
   const eventId = String(url.searchParams.get('eventId') || '').trim();
   if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
-
   await db(env).prepare('DELETE FROM match_results WHERE event_id=?').bind(eventId).run();
-
-  const googleSync = await syncResultToGoogle(env, {
-    action: 'deleteResult',
-    eventId
-  });
-
-  return json({ ok: true, googleSync }, 200, headers);
-}
-
-async function syncResultToGoogle(env, payload) {
-  const url = String(env.GOOGLE_SHEETS_WEBAPP_URL || '').trim();
-  const secret = String(env.GOOGLE_SHEETS_SYNC_SECRET || '').trim();
-
-  if (!url || !secret) {
-    return { ok: false, skipped: true, reason: 'Google Sheets sync není nastaven.' };
-  }
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, secret }),
-      redirect: 'follow'
-    });
-
-    const text = await response.text();
-    let body = {};
-    try { body = JSON.parse(text); }
-    catch { body = { raw: text.slice(0, 300) }; }
-
-    if (!response.ok || !body.ok) {
-      console.error('Google Sheets sync selhal:', response.status, body);
-      return {
-        ok: false,
-        status: response.status,
-        error: body.error || 'Google Apps Script sync selhal.'
-      };
-    }
-
-    return { ok: true };
-  } catch (err) {
-    console.error('Google Sheets sync exception:', err);
-    return { ok: false, error: String(err?.message || err) };
-  }
+  return json({ ok: true }, 200, headers);
 }
 
 async function getStats(env, headers) {
@@ -299,7 +239,7 @@ async function getStats(env, headers) {
     SELECT e.id, e.date, e.start_time, e.payload_json,
            r.our_score, r.opponent_score, r.note, r.updated_at
     FROM events e
-    JOIN match_results r ON r.event_id=e.id
+           JOIN match_results r ON r.event_id=e.id
     ORDER BY e.date DESC, COALESCE(e.start_time, '') DESC, e.id DESC
   `).all();
 
@@ -354,12 +294,12 @@ async function getStats(env, headers) {
 
   const played = matches.length;
   const competitionRows = Object.values(competitions)
-    .map(c => ({
-      ...c,
-      difference: c.pointsFor - c.pointsAgainst,
-      winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0
-    }))
-    .sort((a,b) => b.played - a.played || a.competition.localeCompare(b.competition, 'cs'));
+      .map(c => ({
+        ...c,
+        difference: c.pointsFor - c.pointsAgainst,
+        winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0
+      }))
+      .sort((a,b) => b.played - a.played || a.competition.localeCompare(b.competition, 'cs'));
 
   return json({
     summary: {
@@ -390,7 +330,7 @@ async function getAttendance(url, env, headers) {
   const { results } = await db(env).prepare(`
     SELECT u.id, u.name, a.status, a.updated_at
     FROM users u
-    LEFT JOIN attendance a ON a.user_id=u.id AND a.event_id=?
+           LEFT JOIN attendance a ON a.user_id=u.id AND a.event_id=?
     WHERE u.active=1
     ORDER BY u.name
   `).bind(eventId).all();
@@ -401,8 +341,8 @@ async function getAttendanceSummary(env, headers) {
   const { results } = await db(env).prepare(`
     SELECT e.id AS event_id, u.id AS user_id, u.name, a.status
     FROM events e
-    CROSS JOIN users u
-    LEFT JOIN attendance a ON a.event_id=e.id AND a.user_id=u.id
+           CROSS JOIN users u
+           LEFT JOIN attendance a ON a.event_id=e.id AND a.user_id=u.id
     WHERE e.attendance_enabled=1 AND u.active=1
     ORDER BY e.date, e.start_time, u.name
   `).all();
@@ -423,7 +363,7 @@ async function saveAttendance(request, env, user, headers) {
   if (!event || !event.attendance_enabled) return json({ error: 'U této události není docházka povolena.' }, 400, headers);
   await db(env).prepare(`
     INSERT INTO attendance(event_id,user_id,status,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
+      ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
   `).bind(eventId, user.id, status).run();
   return json({ ok: true, status }, 200, headers);
 }
@@ -474,7 +414,7 @@ async function importEvents(request, env, headers) {
   if (!Array.isArray(events)) return json({ error: 'Očekávám pole events.' }, 400, headers);
 
   const cleanEvents = events.filter(
-    e => importedSources.has(e?.source?.type) && e.id && e.date
+      e => importedSources.has(e?.source?.type) && e.id && e.date
   );
 
   const database = db(env);
@@ -484,12 +424,12 @@ async function importEvents(request, env, headers) {
   // takže původní DELETE mazal spolu s událostmi i veškerou docházku.
   // Nejdřív provedeme UPSERT stávajících událostí, čímž jejich řádky i docházka zůstanou.
   const { results: existingRows } = await database.prepare(
-    "SELECT id FROM events WHERE source_type IN ('excel','pdf','ical')"
+      "SELECT id FROM events WHERE source_type IN ('excel','pdf','ical')"
   ).all();
 
   for (let i = 0; i < cleanEvents.length; i += 50) {
     await database.batch(
-      cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e))
+        cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e))
     );
   }
 
@@ -497,13 +437,13 @@ async function importEvents(request, env, headers) {
   // U těch je smazání docházky očekávané.
   const incomingIds = new Set(cleanEvents.map(e => String(e.id)));
   const staleIds = (existingRows || [])
-    .map(row => String(row.id))
-    .filter(id => !incomingIds.has(id));
+      .map(row => String(row.id))
+      .filter(id => !incomingIds.has(id));
 
   for (let i = 0; i < staleIds.length; i += 50) {
     const chunk = staleIds.slice(i, i + 50);
     await database.batch(
-      chunk.map(id => database.prepare('DELETE FROM events WHERE id=?').bind(id))
+        chunk.map(id => database.prepare('DELETE FROM events WHERE id=?').bind(id))
     );
   }
 
@@ -529,8 +469,8 @@ async function upsertUsers(request, env, headers) {
     statements.push(db(env).prepare(`
       INSERT INTO users(id,name,pin_salt,pin_hash,can_manage_trainings,active,updated_at)
       VALUES(?,?,?,?,?,1,CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name,pin_salt=excluded.pin_salt,pin_hash=excluded.pin_hash,
-        can_manage_trainings=excluded.can_manage_trainings,active=1,updated_at=CURRENT_TIMESTAMP
+        ON CONFLICT(id) DO UPDATE SET name=excluded.name,pin_salt=excluded.pin_salt,pin_hash=excluded.pin_hash,
+                             can_manage_trainings=excluded.can_manage_trainings,active=1,updated_at=CURRENT_TIMESTAMP
     `).bind(id, name, salt, hash, u.canManageTrainings ? 1 : 0));
   }
   await db(env).batch(statements);
@@ -545,11 +485,11 @@ function eventStatement(env, e) {
   return db(env).prepare(`
     INSERT INTO events(id,source_type,date,start_time,payload_json,editable,attendance_enabled,updated_at)
     VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET source_type=excluded.source_type,date=excluded.date,start_time=excluded.start_time,
-      payload_json=excluded.payload_json,editable=excluded.editable,attendance_enabled=excluded.attendance_enabled,updated_at=CURRENT_TIMESTAMP
+      ON CONFLICT(id) DO UPDATE SET source_type=excluded.source_type,date=excluded.date,start_time=excluded.start_time,
+                           payload_json=excluded.payload_json,editable=excluded.editable,attendance_enabled=excluded.attendance_enabled,updated_at=CURRENT_TIMESTAMP
   `).bind(
-    String(e.id), String(e?.source?.type || 'manual'), String(e.date), e.startTime || null,
-    JSON.stringify(e), e.editable ? 1 : 0, e.attendanceEnabled ? 1 : 0
+      String(e.id), String(e?.source?.type || 'manual'), String(e.date), e.startTime || null,
+      JSON.stringify(e), e.editable ? 1 : 0, e.attendanceEnabled ? 1 : 0
   );
 }
 
