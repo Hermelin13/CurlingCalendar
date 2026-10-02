@@ -198,28 +198,6 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-ed442d9c6a98",
-    "type": "match",
-    "title": "CB BUTchers vs R-rated",
-    "team": "CB BUTchers",
-    "opponent": "R-rated",
-    "date": "2026-10-14",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
     "id": "ical-47850ae4a647",
     "type": "event",
     "title": "Nebuď lama! tým jako celek a fungování jednotlivých hráčů v týmu",
@@ -236,28 +214,6 @@
     "source": {
       "type": "ical",
       "name": "Curling Brno EOS",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "excel-991ad68ed3a3",
-    "type": "match",
-    "title": "CB BUTchers vs CB juniorky",
-    "team": "CB BUTchers",
-    "opponent": "CB juniorky",
-    "date": "2026-10-21",
-    "startTime": "18:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "A",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
       "url": null
     },
     "editable": false,
@@ -412,28 +368,6 @@
     "source": {
       "type": "ical",
       "name": "Curling Brno EOS",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "excel-8cd72ff680fd",
-    "type": "match",
-    "title": "CB BUTchers vs CB Kachny",
-    "team": "CB BUTchers",
-    "opponent": "CB Kachny",
-    "date": "2026-11-18",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
       "url": null
     },
     "editable": false,
@@ -704,28 +638,6 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-7345ae3fa474",
-    "type": "match",
-    "title": "CB BUTchers vs Prasklej hrníček",
-    "team": "CB BUTchers",
-    "opponent": "Prasklej hrníček",
-    "date": "2027-01-20",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
     "id": "ical-5710d987b0d9",
     "type": "event",
     "title": "Curling Brno OPEN",
@@ -814,28 +726,6 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-7b2ce13bac6e",
-    "type": "match",
-    "title": "CB BUTchers vs CB Průjezd",
-    "team": "CB BUTchers",
-    "opponent": "CB Průjezd",
-    "date": "2027-02-17",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
     "id": "ical-aa7f5e602f4a",
     "type": "event",
     "title": "MČR 1. liga žen",
@@ -874,72 +764,6 @@
     "source": {
       "type": "ical",
       "name": "Curling Brno EOS",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "excel-56a4454c7f5c",
-    "type": "match",
-    "title": "CB BUTchers vs Skoro Guard",
-    "team": "CB BUTchers",
-    "opponent": "Skoro Guard",
-    "date": "2027-03-03",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "excel-bbf422a30425",
-    "type": "match",
-    "title": "CB BUTchers vs Ovečky a Bača",
-    "team": "CB BUTchers",
-    "opponent": "Ovečky a Bača",
-    "date": "2027-03-10",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "A",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "excel-5cd4856a6c4a",
-    "type": "match",
-    "title": "CB BUTchers vs CB Junioři",
-    "team": "CB BUTchers",
-    "opponent": "CB Junioři",
-    "date": "2027-03-17",
-    "startTime": "18:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "A",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár 2026/27",
       "url": null
     },
     "editable": false,
