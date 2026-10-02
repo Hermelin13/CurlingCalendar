@@ -93,6 +93,18 @@ function availabilityHtml(eventId, compact = true) {
   }).join('')}</span>`;
 }
 
+function isMatch(e) {
+  return e?.type === 'match' || Boolean(e?.opponent);
+}
+
+function resultBadgeHtml(e) {
+  if (!e?.result) return '';
+  const a = Number(e.result.ourScore);
+  const b = Number(e.result.opponentScore);
+  const outcome = a > b ? 'win' : a < b ? 'loss' : 'draw';
+  return `<span class="result-badge result-${outcome}" title="Výsledek">${a}:${b}</span>`;
+}
+
 function normalizeTime(t) {
   if (!t) return '';
   const [h, m] = t.split(':');
@@ -137,7 +149,7 @@ function renderCalendar() {
       const btn = document.createElement('button');
       btn.className = `event-chip source-${sourceType(e)}`;
       const time = e.allDay ? 'celý den' : (e.startTime || '');
-      btn.innerHTML = `<strong>${escapeHtml(e.title)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled ? availabilityHtml(e.id) : ''}`;
+      btn.innerHTML = `<strong>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled ? availabilityHtml(e.id) : ''}`;
       btn.addEventListener('click', () => openEvent(e));
       day.appendChild(btn);
     });
@@ -154,7 +166,7 @@ function renderUpcoming() {
     const d = new Date(`${e.date}T12:00:00`);
     const btn = document.createElement('button');
     btn.className = 'upcoming-item';
-    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)}</h3><p>${escapeHtml(e.startTime || 'celý den')}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
+    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.startTime || 'celý den')}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
     btn.addEventListener('click', ()=>openEvent(e)); box.appendChild(btn);
   });
   if (!events.length) box.innerHTML = '<p class="empty">Žádné nadcházející události.</p>';
@@ -173,6 +185,8 @@ async function openEvent(e) {
   $('#event-description').textContent = e.description || '';
   $('#event-description').classList.toggle('hidden', !e.description);
 
+  renderResultSection(e);
+
   $('#attendance-section').classList.toggle('hidden', !e.attendanceEnabled);
   if (e.attendanceEnabled) await renderAttendance(e);
 
@@ -183,6 +197,79 @@ async function openEvent(e) {
     del.onclick = () => deleteManualEvent(e); actions.appendChild(del);
   }
   $('#event-dialog').showModal();
+}
+
+
+function renderResultSection(event) {
+  const section = $('#result-section');
+  const readonly = $('#result-readonly');
+  const editor = $('#result-editor');
+
+  const match = isMatch(event);
+  section.classList.toggle('hidden', !match);
+  if (!match) return;
+
+  if (event.result) {
+    const a = Number(event.result.ourScore);
+    const b = Number(event.result.opponentScore);
+    const outcomeText = a > b ? 'Výhra' : a < b ? 'Prohra' : 'Remíza';
+    readonly.innerHTML = `
+      <div class="result-display">
+        <strong>${a}:${b}</strong>
+        <span>${outcomeText}${event.result.note ? ` • ${escapeHtml(event.result.note)}` : ''}</span>
+      </div>`;
+  } else {
+    readonly.innerHTML = '<p class="small-muted">Výsledek zatím není zadaný.</p>';
+  }
+
+  editor.classList.toggle('hidden', !state.user);
+  if (state.user) {
+    $('#result-our-score').value = event.result?.ourScore ?? '';
+    $('#result-opponent-score').value = event.result?.opponentScore ?? '';
+    $('#result-note').value = event.result?.note || '';
+    $('#result-delete-btn').classList.toggle('hidden', !event.result);
+    $('#result-error').textContent = '';
+  }
+}
+
+async function saveResult(event) {
+  if (!state.user) return showToast('Nejdřív se přihlas.');
+  const ourScore = Number($('#result-our-score').value);
+  const opponentScore = Number($('#result-opponent-score').value);
+  const note = $('#result-note').value.trim();
+
+  if (!Number.isInteger(ourScore) || !Number.isInteger(opponentScore) ||
+      ourScore < 0 || ourScore > 99 || opponentScore < 0 || opponentScore > 99) {
+    $('#result-error').textContent = 'Zadej skóre 0–99 pro oba týmy.';
+    return;
+  }
+
+  try {
+    const body = await api('/api/results', {
+      method: 'PUT',
+      body: JSON.stringify({ eventId: event.id, ourScore, opponentScore, note })
+    });
+    event.result = body.result;
+    renderResultSection(event);
+    renderAll();
+    showToast('Výsledek uložen.');
+  } catch (err) {
+    $('#result-error').textContent = err.message;
+  }
+}
+
+async function deleteResult(event) {
+  if (!state.user || !event.result) return;
+  if (!confirm(`Smazat výsledek zápasu „${event.title}“?`)) return;
+  try {
+    await api(`/api/results?eventId=${encodeURIComponent(event.id)}`, { method: 'DELETE' });
+    delete event.result;
+    renderResultSection(event);
+    renderAll();
+    showToast('Výsledek smazán.');
+  } catch (err) {
+    $('#result-error').textContent = err.message;
+  }
 }
 
 async function renderAttendance(event) {
@@ -350,6 +437,8 @@ function wireUI() {
     catch(err) { $('#change-pin-error').textContent=err.message; }
   });
   $('#training-form').addEventListener('submit', addTraining);
+  $('#result-save-btn').addEventListener('click', () => state.selectedEvent && saveResult(state.selectedEvent));
+  $('#result-delete-btn').addEventListener('click', () => state.selectedEvent && deleteResult(state.selectedEvent));
 }
 
 async function boot() {

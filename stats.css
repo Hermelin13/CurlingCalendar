@@ -1,0 +1,50 @@
+.stats-layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px clamp(14px, 3vw, 40px) 44px;
+  display: grid;
+  gap: 18px;
+}
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+.stat-card span { display:block; color:var(--muted); font-size:.76rem; font-weight:750; margin-bottom:6px; }
+.stat-card strong { display:block; font-size:1.55rem; line-height:1.1; }
+.stats-panel { padding:18px; }
+.stats-heading { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:14px; }
+.stats-heading h2 { margin:0; font-size:1.1rem; }
+.form-strip { display:flex; gap:7px; flex-wrap:wrap; }
+.form-dot {
+  width:34px; height:34px; border-radius:50%;
+  display:inline-grid; place-items:center; font-size:.78rem; font-weight:900;
+  border:1px solid var(--line);
+}
+.form-win { background:#e7f6eb; color:var(--yes); border-color:#a9dab6; }
+.form-loss { background:#fdebea; color:var(--no); border-color:#e6b1ad; }
+.form-draw { background:#eef1f5; color:#626d7d; border-color:#d6dce4; }
+.table-wrap { overflow-x:auto; }
+.stats-table { width:100%; border-collapse:collapse; min-width:650px; }
+.stats-table th, .stats-table td { padding:10px 9px; border-bottom:1px solid var(--line); text-align:left; font-size:.83rem; }
+.stats-table th { color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
+.match-result { display:inline-flex; min-width:48px; justify-content:center; padding:5px 8px; border-radius:999px; font-weight:900; }
+.stats-error { padding:0 4px; }
+@media (max-width: 1000px) { .stats-cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+@media (max-width: 620px) {
+  .stats-cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .stats-heading { align-items:flex-start; flex-direction:column; }
+}
+@media (prefers-color-scheme: dark) {
+  .form-win { background:#173a24; color:#9de0ad; border-color:#2e6540; }
+  .form-loss { background:#4a211f; color:#ffb0aa; border-color:#7a3732; }
+  .form-draw { background:#252d39; color:#b4bdca; border-color:#3b4655; }
+}

@@ -32,6 +32,19 @@ export default {
       if (url.pathname === '/api/events' && request.method === 'GET') {
         return listEvents(env, cors.headers);
       }
+      if (url.pathname === '/api/results' && request.method === 'PUT') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        return saveResult(request, env, auth.user, cors.headers);
+      }
+      if (url.pathname === '/api/results' && request.method === 'DELETE') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        return deleteResult(url, env, cors.headers);
+      }
+      if (url.pathname === '/api/stats' && request.method === 'GET') {
+        return getStats(env, cors.headers);
+      }
       if (url.pathname === '/api/attendance' && request.method === 'GET') {
         return getAttendance(url, env, cors.headers);
       }
@@ -149,9 +162,164 @@ async function requireUser(request, env) {
 }
 
 async function listEvents(env, headers) {
-  const { results } = await db(env).prepare('SELECT payload_json FROM events ORDER BY date, COALESCE(start_time, ""), id').all();
-  const events = results.map(r => JSON.parse(r.payload_json));
+  const { results } = await db(env).prepare(`
+    SELECT e.payload_json, r.our_score, r.opponent_score, r.note, r.updated_at AS result_updated_at
+    FROM events e
+    LEFT JOIN match_results r ON r.event_id=e.id
+    ORDER BY e.date, COALESCE(e.start_time, ''), e.id
+  `).all();
+
+  const events = results.map(row => {
+    const event = JSON.parse(row.payload_json);
+    if (row.our_score !== null && row.our_score !== undefined &&
+        row.opponent_score !== null && row.opponent_score !== undefined) {
+      event.result = {
+        ourScore: Number(row.our_score),
+        opponentScore: Number(row.opponent_score),
+        note: row.note || null,
+        updatedAt: row.result_updated_at || null
+      };
+    }
+    return event;
+  });
+
   return json({ events }, 200, headers);
+}
+
+
+async function saveResult(request, env, user, headers) {
+  const body = await readJson(request);
+  const eventId = String(body.eventId || '').trim();
+  const ourScore = Number(body.ourScore);
+  const opponentScore = Number(body.opponentScore);
+  const note = clean(body.note, 500);
+
+  if (!eventId || !Number.isInteger(ourScore) || !Number.isInteger(opponentScore) ||
+      ourScore < 0 || ourScore > 99 || opponentScore < 0 || opponentScore > 99) {
+    return json({ error: 'Zadej platný výsledek 0–99 pro oba týmy.' }, 400, headers);
+  }
+
+  const row = await db(env).prepare('SELECT payload_json FROM events WHERE id=?').bind(eventId).first();
+  if (!row) return json({ error: 'Zápas neexistuje.' }, 404, headers);
+
+  let event;
+  try { event = JSON.parse(row.payload_json); }
+  catch { return json({ error: 'Událost má neplatná data.' }, 500, headers); }
+
+  if (event.type !== 'match' && !event.opponent) {
+    return json({ error: 'Výsledek lze zadat jen k zápasu.' }, 400, headers);
+  }
+
+  await db(env).prepare(`
+    INSERT INTO match_results(event_id,our_score,opponent_score,note,updated_by,updated_at)
+    VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(event_id) DO UPDATE SET
+      our_score=excluded.our_score,
+      opponent_score=excluded.opponent_score,
+      note=excluded.note,
+      updated_by=excluded.updated_by,
+      updated_at=CURRENT_TIMESTAMP
+  `).bind(eventId, ourScore, opponentScore, note, user.id).run();
+
+  return json({
+    ok: true,
+    result: { ourScore, opponentScore, note }
+  }, 200, headers);
+}
+
+async function deleteResult(url, env, headers) {
+  const eventId = String(url.searchParams.get('eventId') || '').trim();
+  if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
+  await db(env).prepare('DELETE FROM match_results WHERE event_id=?').bind(eventId).run();
+  return json({ ok: true }, 200, headers);
+}
+
+async function getStats(env, headers) {
+  const { results } = await db(env).prepare(`
+    SELECT e.id, e.date, e.start_time, e.payload_json,
+           r.our_score, r.opponent_score, r.note, r.updated_at
+    FROM events e
+    JOIN match_results r ON r.event_id=e.id
+    ORDER BY e.date DESC, COALESCE(e.start_time, '') DESC, e.id DESC
+  `).all();
+
+  const matches = [];
+  const competitions = {};
+
+  let wins = 0, losses = 0, draws = 0, pointsFor = 0, pointsAgainst = 0;
+
+  for (const row of results) {
+    let event;
+    try { event = JSON.parse(row.payload_json); }
+    catch { continue; }
+
+    const ourScore = Number(row.our_score);
+    const opponentScore = Number(row.opponent_score);
+    const outcome = ourScore > opponentScore ? 'win' : ourScore < opponentScore ? 'loss' : 'draw';
+
+    if (outcome === 'win') wins++;
+    else if (outcome === 'loss') losses++;
+    else draws++;
+
+    pointsFor += ourScore;
+    pointsAgainst += opponentScore;
+
+    const competition = event.competition || sourceStatsLabel(event?.source?.type);
+    if (!competitions[competition]) {
+      competitions[competition] = {
+        competition,
+        played: 0, wins: 0, losses: 0, draws: 0,
+        pointsFor: 0, pointsAgainst: 0
+      };
+    }
+    const c = competitions[competition];
+    c.played++;
+    c[outcome === 'win' ? 'wins' : outcome === 'loss' ? 'losses' : 'draws']++;
+    c.pointsFor += ourScore;
+    c.pointsAgainst += opponentScore;
+
+    matches.push({
+      id: event.id,
+      date: event.date,
+      startTime: event.startTime || null,
+      opponent: event.opponent || '—',
+      competition,
+      location: event.location || null,
+      ourScore,
+      opponentScore,
+      outcome,
+      note: row.note || null
+    });
+  }
+
+  const played = matches.length;
+  const competitionRows = Object.values(competitions)
+    .map(c => ({
+      ...c,
+      difference: c.pointsFor - c.pointsAgainst,
+      winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0
+    }))
+    .sort((a,b) => b.played - a.played || a.competition.localeCompare(b.competition, 'cs'));
+
+  return json({
+    summary: {
+      played,
+      wins,
+      losses,
+      draws,
+      pointsFor,
+      pointsAgainst,
+      difference: pointsFor - pointsAgainst,
+      winPct: played ? Math.round((wins / played) * 1000) / 10 : 0
+    },
+    form: matches.slice(0, 5).map(m => m.outcome),
+    competitions: competitionRows,
+    matches
+  }, 200, headers);
+}
+
+function sourceStatsLabel(type) {
+  return ({ excel: 'Brněnský pohár', pdf: 'MČR / divize', ical: 'iCal', manual: 'Ruční' })[type] || 'Ostatní';
 }
 
 async function getAttendance(url, env, headers) {

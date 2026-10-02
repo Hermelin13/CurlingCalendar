@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>CB BUTchers – statistiky</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="stats.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Curling • CB BUTchers</p>
+      <h1>Statistiky zápasů</h1>
+    </div>
+    <div class="top-actions">
+      <a class="button secondary button-link" href="index.html">← Kalendář</a>
+    </div>
+  </header>
+
+  <main class="stats-layout">
+    <section id="summary-cards" class="stats-cards" aria-live="polite"></section>
+
+    <section class="panel stats-panel">
+      <div class="stats-heading">
+        <div>
+          <p class="eyebrow">Forma</p>
+          <h2>Posledních 5 zápasů</h2>
+        </div>
+        <div id="form-strip" class="form-strip"></div>
+      </div>
+    </section>
+
+    <section class="panel stats-panel">
+      <div class="stats-heading">
+        <div>
+          <p class="eyebrow">Soutěže</p>
+          <h2>Statistiky podle soutěže</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="stats-table">
+          <thead><tr><th>Soutěž</th><th>Z</th><th>V</th><th>R</th><th>P</th><th>Skóre</th><th>+/-</th><th>Úspěšnost</th></tr></thead>
+          <tbody id="competition-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel stats-panel">
+      <div class="stats-heading">
+        <div>
+          <p class="eyebrow">Historie</p>
+          <h2>Odehrané zápasy</h2>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="stats-table matches-table">
+          <thead><tr><th>Datum</th><th>Soupeř</th><th>Soutěž</th><th>Výsledek</th><th>Místo</th></tr></thead>
+          <tbody id="matches-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p id="stats-error" class="error stats-error"></p>
+  </main>
+
+  <script src="stats.js" defer></script>
+</body>
+</html>

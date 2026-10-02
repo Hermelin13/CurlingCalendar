@@ -17,6 +17,7 @@
       <span id="login-state" class="login-state">Nepřihlášen</span>
       <button id="login-btn" class="button secondary">Přihlásit</button>
       <button id="export-btn" class="button secondary">Export .ics</button>
+      <a class="button secondary button-link" href="stats.html">Statistiky</a>
       <button id="change-pin-btn" class="button secondary hidden">Změnit PIN</button>
       <button id="logout-btn" class="button secondary hidden">Odhlásit</button>
       <button id="add-training-btn" class="button primary hidden">+ Přidat trénink</button>
@@ -73,6 +74,32 @@
       <h2 id="event-title"></h2>
       <div id="event-meta" class="event-meta"></div>
       <p id="event-description" class="event-description"></p>
+
+      <section id="result-section" class="result-section hidden">
+        <div class="section-title-row">
+          <h3>Výsledek</h3>
+        </div>
+        <div id="result-readonly"></div>
+        <div id="result-editor" class="result-editor hidden">
+          <div class="score-inputs">
+            <label class="field">CB BUTchers
+              <input id="result-our-score" type="number" min="0" max="99" inputmode="numeric" />
+            </label>
+            <span class="score-separator">:</span>
+            <label class="field">Soupeř
+              <input id="result-opponent-score" type="number" min="0" max="99" inputmode="numeric" />
+            </label>
+          </div>
+          <label class="field">Poznámka
+            <input id="result-note" type="text" maxlength="500" placeholder="např. kontumace, poznámka k zápasu" />
+          </label>
+          <p id="result-error" class="error"></p>
+          <div class="result-actions">
+            <button id="result-delete-btn" type="button" class="button danger hidden">Smazat výsledek</button>
+            <button id="result-save-btn" type="button" class="button result-save">Uložit výsledek</button>
+          </div>
+        </div>
+      </section>
 
       <section id="attendance-section" class="attendance-section hidden">
         <div class="section-title-row">
