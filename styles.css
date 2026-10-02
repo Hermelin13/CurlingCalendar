@@ -317,3 +317,69 @@ body.quick-rsvp-active {
     transition: none;
   }
 }
+
+
+/* Druhá sada filtrů se na desktopu nezobrazuje. */
+.mobile-event-filters {
+  display: none;
+}
+
+/* Lepší mobilní rozložení hlavní stránky */
+@media (max-width: 760px) {
+  /* Toolbar kalendáře na telefonu nechává jen navigaci a název měsíce.
+     Filtry jsou přesunuté nad nejbližší události. */
+  .calendar-toolbar > .filters {
+    display: none;
+  }
+
+  .mobile-event-filters {
+    display: block;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mobile-event-filters .eyebrow {
+    margin-bottom: 8px;
+  }
+
+  .mobile-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .mobile-filters label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+    font-size: .84rem;
+    font-weight: 700;
+    white-space: normal;
+  }
+
+  .mobile-filters input {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar {
+    padding: 14px;
+  }
+
+  .sidebar-head {
+    padding-bottom: 11px;
+  }
+}
+
+@media (max-width: 370px) {
+  .mobile-filters {
+    grid-template-columns: 1fr;
+  }
+}

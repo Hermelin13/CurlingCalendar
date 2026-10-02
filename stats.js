@@ -44,20 +44,23 @@ function render(data) {
 
   $('#competition-body').innerHTML = (data.competitions || []).map(c => `
     <tr>
-      <td><strong>${escapeHtml(c.competition)}</strong></td>
-      <td>${c.played}</td><td>${c.wins}</td><td>${c.draws}</td><td>${c.losses}</td>
-      <td>${c.pointsFor}:${c.pointsAgainst}</td>
-      <td>${c.difference > 0 ? '+' : ''}${c.difference}</td>
-      <td>${c.winPct} %</td>
+      <td data-label="Soutěž"><strong>${escapeHtml(c.competition)}</strong></td>
+      <td data-label="Zápasy">${c.played}</td>
+      <td data-label="Výhry">${c.wins}</td>
+      <td data-label="Remízy">${c.draws}</td>
+      <td data-label="Prohry">${c.losses}</td>
+      <td data-label="Skóre">${c.pointsFor}:${c.pointsAgainst}</td>
+      <td data-label="+/-">${c.difference > 0 ? '+' : ''}${c.difference}</td>
+      <td data-label="Úspěšnost">${c.winPct} %</td>
     </tr>`).join('') || '<tr><td colspan="8" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
 
   $('#matches-body').innerHTML = (data.matches || []).map(m => `
-    <tr>
-      <td>${escapeHtml(formatDateCZ(m.date))}</td>
-      <td><strong>${escapeHtml(m.opponent)}</strong></td>
-      <td>${escapeHtml(m.competition)}</td>
-      <td><span class="match-result result-${m.outcome}">${m.ourScore}:${m.opponentScore}</span></td>
-      <td>${escapeHtml(m.location || '—')}</td>
+    <tr class="match-row">
+      <td data-label="Datum">${escapeHtml(formatDateCZ(m.date))}</td>
+      <td data-label="Soupeř"><strong>${escapeHtml(m.opponent)}</strong></td>
+      <td data-label="Soutěž">${escapeHtml(m.competition)}</td>
+      <td data-label="Výsledek"><span class="match-result result-${m.outcome}">${m.ourScore}:${m.opponentScore}</span></td>
+      <td data-label="Místo">${escapeHtml(m.location || '—')}</td>
     </tr>`).join('') || '<tr><td colspan="5" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
 }
 

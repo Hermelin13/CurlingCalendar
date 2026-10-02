@@ -628,7 +628,18 @@ function wireUI() {
   $('#prev-month').onclick=()=>{ state.month=new Date(state.month.getFullYear(),state.month.getMonth()-1,1); renderCalendar(); };
   $('#next-month').onclick=()=>{ state.month=new Date(state.month.getFullYear(),state.month.getMonth()+1,1); renderCalendar(); };
   $('#today-btn').onclick=()=>{ const n=new Date(); state.month=new Date(n.getFullYear(),n.getMonth(),1); renderCalendar(); };
-  $$('.filters input').forEach(i=>i.addEventListener('change',()=>{ i.checked?state.filters.add(i.value):state.filters.delete(i.value); renderAll(); }));
+  $$('.filters input').forEach(i => i.addEventListener('change', () => {
+    if (i.checked) state.filters.add(i.value);
+    else state.filters.delete(i.value);
+
+    // Na mobilu je druhá sada filtrů nad „Nejbližšími událostmi“.
+    // Udržujeme obě sady vždy synchronizované.
+    $$('.filters input').forEach(other => {
+      if (other.value === i.value) other.checked = i.checked;
+    });
+
+    renderAll();
+  }));
   $('#login-btn').onclick=()=>$('#login-dialog').showModal(); $('#logout-btn').onclick=()=>logout();
   $('#export-btn').onclick=exportCalendar;
   $('#change-pin-btn').onclick=()=>{ $('#change-pin-form').reset(); $('#change-pin-error').textContent=''; $('#change-pin-dialog').showModal(); };
