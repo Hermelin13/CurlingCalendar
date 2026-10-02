@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import re
-import tempfile
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -14,7 +13,6 @@ import pdfplumber
 import requests
 from dateutil import parser as date_parser
 from icalendar import Calendar
-from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_FILE = ROOT / "data" / "events.json"
@@ -55,57 +53,109 @@ def base_event(*, event_id, event_type, title, date_str, start_time=None, end_ti
     }
 
 
-def parse_excel(path: Path, cfg: dict) -> list[dict]:
-    wb = load_workbook(path, data_only=True, read_only=True)
-    ws = wb[cfg.get("sheet", "Rozpis")]
+def parse_schedule_rows(rows: list[list[object]], cfg: dict) -> list[dict]:
+    """
+    Parse the Brněnský pohár schedule from raw Google Sheets rows.
+
+    The parser intentionally mirrors the old XLSX parser:
+    - a date block starts with A == "Dráha - Čas"
+    - column B contains the date
+    - a match starts with e.g. "A - 18:00" / "B - 20:00"
+    - the two teams are in column B on two consecutive rows
+    """
     current_date = None
     out = []
+
+    def cell(row, index):
+        if index >= len(row):
+            return ""
+        value = row[index]
+        return "" if value is None else str(value).strip()
 
     def parse_header_date(value):
         if isinstance(value, datetime):
             return value.date()
         if isinstance(value, date):
             return value
-        if isinstance(value, str):
-            m = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})", value)
-            if m:
-                return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        return None
 
-    row = 1
-    while row <= ws.max_row:
-        col_a = ws.cell(row, 1).value
-        col_b = ws.cell(row, 2).value
-        if col_a == "Dráha - Čas":
+        text = str(value or "").strip()
+        m = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})", text)
+        if m:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+
+        # Google Sheets may return ISO-like dates depending on cell formatting.
+        try:
+            return date_parser.parse(text, dayfirst=True).date()
+        except Exception:
+            return None
+
+    row = 0
+    while row < len(rows):
+        col_a = cell(rows[row], 0)
+        col_b = cell(rows[row], 1)
+
+        if norm(col_a) == norm("Dráha - Čas"):
             current_date = parse_header_date(col_b)
             row += 1
             continue
 
-        if isinstance(col_a, str) and re.match(r"^[AB]\s*-\s*\d{1,2}:\d{2}$", col_a):
-            team1 = str(col_b or "").strip()
-            team2 = str(ws.cell(row + 1, 2).value or "").strip()
+        if re.match(r"^[AB]\s*-\s*\d{1,2}:\d{2}$", col_a, re.I):
+            team1 = col_b
+            team2 = cell(rows[row + 1], 1) if row + 1 < len(rows) else ""
+
             if current_date and (norm(team1) == norm(TEAM) or norm(team2) == norm(TEAM)):
                 rink, start = [x.strip() for x in col_a.split("-", 1)]
                 opponent = team2 if norm(team1) == norm(TEAM) else team1
                 d = current_date.isoformat()
+
                 out.append(base_event(
-                    event_id=stable_id("excel", d, start, rink, opponent),
+                    event_id=stable_id("excel", d, start, rink.upper(), opponent),
                     event_type="match",
                     title=f"{TEAM} vs {opponent}",
                     date_str=d,
                     start_time=start,
                     location=cfg.get("location", "Curling Brno"),
-                    rink=rink,
+                    rink=rink.upper(),
                     competition=cfg.get("competition", "Brněnský pohár"),
-                    source_type="excel",
-                    source_name="Brněnský pohár 2026/27",
+                    source_type="excel",  # keep existing frontend filter / DB source type
+                    source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
                     opponent=opponent,
                 ))
+
             row += 2
             continue
+
         row += 1
+
     return out
 
+
+def parse_google_sheet(webapp_url: str, secret: str, cfg: dict) -> list[dict]:
+    """
+    Reads the schedule through the Google Apps Script web app.
+    This keeps the spreadsheet private: GitHub Actions only knows a secret URL/token,
+    not Google credentials.
+    """
+    if not webapp_url or not secret:
+        raise RuntimeError("Chybí GOOGLE_SHEETS_WEBAPP_URL nebo GOOGLE_SHEETS_SYNC_SECRET.")
+
+    response = requests.get(
+        webapp_url,
+        params={"action": "schedule", "secret": secret},
+        timeout=45,
+        allow_redirects=True,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    if not payload.get("ok"):
+        raise RuntimeError(payload.get("error") or "Google Sheets endpoint vrátil chybu.")
+
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise RuntimeError("Google Sheets endpoint nevrátil pole rows.")
+
+    return parse_schedule_rows(rows, cfg)
 
 def _split_pdf_columns(words: list[dict], anchors: list[float]) -> dict[int, str]:
     bounds = [(anchors[i] + anchors[i + 1]) / 2 for i in range(len(anchors) - 1)]
@@ -250,33 +300,24 @@ def source_slice(existing, source_type):
     return [e for e in existing if e.get("source", {}).get("type") == source_type]
 
 
-def maybe_download_excel(local_path: Path) -> Path:
-    url = os.getenv("GOOGLE_SHEET_XLSX_URL", "").strip()
-    if not url:
-        return local_path
-    try:
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-        tmp.write(r.content)
-        tmp.close()
-        print("Excel stažen z GOOGLE_SHEET_XLSX_URL")
-        return Path(tmp.name)
-    except Exception as exc:
-        print(f"VAROVÁNÍ: Google Sheet se nepodařilo stáhnout, používám lokální Excel: {exc}")
-        return local_path
-
 
 def main():
     cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     existing = load_existing()
 
+    google_cfg = cfg.get("googleSheet", {})
+    google_webapp_url = os.getenv("GOOGLE_SHEETS_WEBAPP_URL", "").strip()
+    google_sync_secret = os.getenv("GOOGLE_SHEETS_SYNC_SECRET", "").strip()
+
     try:
-        excel_path = maybe_download_excel(ROOT / cfg["excel"]["path"])
-        excel_events = parse_excel(excel_path, cfg["excel"])
-        print(f"Excel: {len(excel_events)} zápasů")
+        excel_events = parse_google_sheet(
+            google_webapp_url,
+            google_sync_secret,
+            google_cfg,
+        )
+        print(f"Google Sheets: {len(excel_events)} zápasů")
     except Exception as exc:
-        print(f"VAROVÁNÍ: Excel import selhal, zachovávám poslední data: {exc}")
+        print(f"VAROVÁNÍ: Google Sheets import selhal, zachovávám poslední data: {exc}")
         excel_events = source_slice(existing, "excel")
 
     try:

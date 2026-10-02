@@ -35,6 +35,8 @@ jobs:
       - name: Build events
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
+          GOOGLE_SHEETS_WEBAPP_URL: ${{ secrets.GOOGLE_SHEETS_WEBAPP_URL }}
+          GOOGLE_SHEETS_SYNC_SECRET: ${{ secrets.GOOGLE_SHEETS_SYNC_SECRET }}
         run: python scripts/build_events.py
 
       - name: Upload events to Cloudflare

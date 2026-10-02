@@ -221,17 +221,77 @@ async function saveResult(request, env, user, headers) {
       updated_at=CURRENT_TIMESTAMP
   `).bind(eventId, ourScore, opponentScore, note, user.id).run();
 
+  const googleSync = await syncResultToGoogle(env, {
+    action: 'setResult',
+    eventId,
+    date: event.date || null,
+    startTime: event.startTime || null,
+    rink: event.rink || null,
+    team: event.team || env.TEAM_NAME || 'CB BUTchers',
+    opponent: event.opponent || null,
+    competition: event.competition || null,
+    ourScore,
+    opponentScore,
+    note,
+    updatedBy: user.name || user.id
+  });
+
   return json({
     ok: true,
-    result: { ourScore, opponentScore, note }
+    result: { ourScore, opponentScore, note },
+    googleSync
   }, 200, headers);
 }
 
 async function deleteResult(url, env, headers) {
   const eventId = String(url.searchParams.get('eventId') || '').trim();
   if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
+
   await db(env).prepare('DELETE FROM match_results WHERE event_id=?').bind(eventId).run();
-  return json({ ok: true }, 200, headers);
+
+  const googleSync = await syncResultToGoogle(env, {
+    action: 'deleteResult',
+    eventId
+  });
+
+  return json({ ok: true, googleSync }, 200, headers);
+}
+
+async function syncResultToGoogle(env, payload) {
+  const url = String(env.GOOGLE_SHEETS_WEBAPP_URL || '').trim();
+  const secret = String(env.GOOGLE_SHEETS_SYNC_SECRET || '').trim();
+
+  if (!url || !secret) {
+    return { ok: false, skipped: true, reason: 'Google Sheets sync není nastaven.' };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ ...payload, secret }),
+      redirect: 'follow'
+    });
+
+    const text = await response.text();
+    let body = {};
+    try { body = JSON.parse(text); }
+    catch { body = { raw: text.slice(0, 300) }; }
+
+    if (!response.ok || !body.ok) {
+      console.error('Google Sheets sync selhal:', response.status, body);
+      return {
+        ok: false,
+        status: response.status,
+        error: body.error || 'Google Apps Script sync selhal.'
+      };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error('Google Sheets sync exception:', err);
+    return { ok: false, error: String(err?.message || err) };
+  }
 }
 
 async function getStats(env, headers) {

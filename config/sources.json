@@ -1,7 +1,8 @@
 {
-  "excel": {
-    "path": "sources/Brnensky_pohar_2026_27.xlsx",
-    "sheet": "Rozpis",
+  "googleSheet": {
+    "spreadsheetId": "17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY",
+    "gid": 116203339,
+    "name": "Brněnský pohár – Google Sheets",
     "competition": "Brněnský pohár",
     "location": "Curling Brno"
   },
