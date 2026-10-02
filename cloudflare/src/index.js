@@ -244,12 +244,46 @@ async function importEvents(request, env, headers) {
   const body = await readJson(request);
   const events = Array.isArray(body) ? body : body.events;
   if (!Array.isArray(events)) return json({ error: 'Očekávám pole events.' }, 400, headers);
-  const cleanEvents = events.filter(e => importedSources.has(e?.source?.type) && e.id && e.date);
-  await db(env).prepare("DELETE FROM events WHERE source_type IN ('excel','pdf','ical')").run();
+
+  const cleanEvents = events.filter(
+    e => importedSources.has(e?.source?.type) && e.id && e.date
+  );
+
+  const database = db(env);
+
+  // DŮLEŽITÉ:
+  // Události už před importem nemažeme. attendance.event_id má ON DELETE CASCADE,
+  // takže původní DELETE mazal spolu s událostmi i veškerou docházku.
+  // Nejdřív provedeme UPSERT stávajících událostí, čímž jejich řádky i docházka zůstanou.
+  const { results: existingRows } = await database.prepare(
+    "SELECT id FROM events WHERE source_type IN ('excel','pdf','ical')"
+  ).all();
+
   for (let i = 0; i < cleanEvents.length; i += 50) {
-    await db(env).batch(cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e)));
+    await database.batch(
+      cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e))
+    );
   }
-  return json({ ok: true, imported: cleanEvents.length }, 200, headers);
+
+  // Odstraníme pouze události, které už opravdu ve zdrojích nejsou.
+  // U těch je smazání docházky očekávané.
+  const incomingIds = new Set(cleanEvents.map(e => String(e.id)));
+  const staleIds = (existingRows || [])
+    .map(row => String(row.id))
+    .filter(id => !incomingIds.has(id));
+
+  for (let i = 0; i < staleIds.length; i += 50) {
+    const chunk = staleIds.slice(i, i + 50);
+    await database.batch(
+      chunk.map(id => database.prepare('DELETE FROM events WHERE id=?').bind(id))
+    );
+  }
+
+  return json({
+    ok: true,
+    imported: cleanEvents.length,
+    removed: staleIds.length
+  }, 200, headers);
 }
 
 async function upsertUsers(request, env, headers) {
