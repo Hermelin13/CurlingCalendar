@@ -16,6 +16,214 @@ const pad = (n) => String(n).padStart(2, '0');
 const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const sourceType = (e) => e?.source?.type || 'manual';
 
+
+const quickRsvp = {
+  timer: null,
+  active: false,
+  event: null,
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  selected: null,
+  picker: null,
+  suppressClickUntil: 0,
+};
+
+function canQuickRsvp(event) {
+  return Boolean(
+    event?.attendanceEnabled &&
+    state.user &&
+    state.token
+  );
+}
+
+function clearQuickRsvpTimer() {
+  if (quickRsvp.timer) {
+    clearTimeout(quickRsvp.timer);
+    quickRsvp.timer = null;
+  }
+}
+
+function removeQuickRsvpPicker() {
+  quickRsvp.picker?.remove();
+  quickRsvp.picker = null;
+  quickRsvp.selected = null;
+  document.body.classList.remove('quick-rsvp-active');
+}
+
+function cancelQuickRsvp() {
+  clearQuickRsvpTimer();
+  if (quickRsvp.active) removeQuickRsvpPicker();
+  quickRsvp.active = false;
+  quickRsvp.event = null;
+  quickRsvp.pointerId = null;
+}
+
+function showQuickRsvpPicker(clientX, clientY) {
+  removeQuickRsvpPicker();
+
+  const picker = document.createElement('div');
+  picker.className = 'quick-rsvp-picker';
+  picker.setAttribute('role', 'menu');
+  picker.setAttribute('aria-label', 'Rychlá volba účasti');
+  picker.innerHTML = `
+    <button type="button" class="quick-rsvp-option yes" data-quick-status="yes">Ano</button>
+    <button type="button" class="quick-rsvp-option maybe" data-quick-status="maybe">Možná</button>
+    <button type="button" class="quick-rsvp-option no" data-quick-status="no">Ne</button>
+  `;
+  document.body.appendChild(picker);
+
+  // Volbu umístíme nad prst. Na okrajích obrazovky ji posuneme dovnitř.
+  const rect = picker.getBoundingClientRect();
+  const margin = 10;
+  const desiredLeft = clientX - rect.width / 2;
+  const left = Math.max(margin, Math.min(window.innerWidth - rect.width - margin, desiredLeft));
+  const desiredTop = clientY - rect.height - 42;
+  const top = Math.max(margin, Math.min(window.innerHeight - rect.height - margin, desiredTop));
+
+  picker.style.left = `${left}px`;
+  picker.style.top = `${top}px`;
+
+  quickRsvp.picker = picker;
+  document.body.classList.add('quick-rsvp-active');
+
+  if (navigator.vibrate) navigator.vibrate(18);
+}
+
+function updateQuickRsvpSelection(clientX, clientY) {
+  if (!quickRsvp.picker) return;
+
+  const target = document.elementFromPoint(clientX, clientY);
+  const option = target?.closest?.('[data-quick-status]');
+  const status = option && quickRsvp.picker.contains(option)
+    ? option.dataset.quickStatus
+    : null;
+
+  if (status === quickRsvp.selected) return;
+  quickRsvp.selected = status;
+
+  quickRsvp.picker.querySelectorAll('[data-quick-status]').forEach(el => {
+    el.classList.toggle('selected', el.dataset.quickStatus === status);
+  });
+
+  if (status && navigator.vibrate) navigator.vibrate(8);
+}
+
+async function finishQuickRsvp() {
+  const event = quickRsvp.event;
+  const status = quickRsvp.selected;
+
+  clearQuickRsvpTimer();
+  quickRsvp.suppressClickUntil = Date.now() + 700;
+  quickRsvp.active = false;
+  quickRsvp.event = null;
+  quickRsvp.pointerId = null;
+  removeQuickRsvpPicker();
+
+  if (!event || !status) {
+    showToast('Volba účasti zrušena.');
+    return;
+  }
+
+  await saveAttendanceQuick(event.id, status);
+}
+
+async function saveAttendanceQuick(eventId, status) {
+  if (!state.user || !state.token) return showToast('Nejdřív se přihlas PINem.');
+
+  const labels = { yes: 'Ano', maybe: 'Možná', no: 'Ne' };
+  try {
+    await api('/api/attendance', {
+      method: 'PUT',
+      body: JSON.stringify({ eventId, status })
+    });
+
+    await loadAttendanceSummary();
+    renderAll();
+
+    // Pokud je otevřen detail stejné události, aktualizuj i jeho docházku.
+    if (state.selectedEvent?.id === eventId && $('#event-dialog')?.open) {
+      await renderAttendance(state.selectedEvent);
+    }
+
+    showToast(`Účast: ${labels[status]}.`);
+  } catch (err) {
+    showToast(`Uložení se nepovedlo: ${err.message}`);
+  }
+}
+
+function attachQuickAttendance(element, event) {
+  // Myš necháváme beze změny. Zkratka je určená pro dotyk / stylus.
+  element.addEventListener('pointerdown', ev => {
+    if (ev.pointerType === 'mouse' || !canQuickRsvp(event)) return;
+    if (quickRsvp.active) cancelQuickRsvp();
+
+    quickRsvp.event = event;
+    quickRsvp.pointerId = ev.pointerId;
+    quickRsvp.startX = ev.clientX;
+    quickRsvp.startY = ev.clientY;
+    quickRsvp.selected = null;
+
+    clearQuickRsvpTimer();
+    quickRsvp.timer = setTimeout(() => {
+      quickRsvp.timer = null;
+      quickRsvp.active = true;
+      quickRsvp.suppressClickUntil = Date.now() + 700;
+
+      try { element.setPointerCapture(ev.pointerId); } catch {}
+      showQuickRsvpPicker(quickRsvp.startX, quickRsvp.startY);
+    }, 500);
+  });
+
+  element.addEventListener('pointermove', ev => {
+    if (ev.pointerType === 'mouse' || ev.pointerId !== quickRsvp.pointerId) return;
+
+    const dx = ev.clientX - quickRsvp.startX;
+    const dy = ev.clientY - quickRsvp.startY;
+    const distance = Math.hypot(dx, dy);
+
+    // Před aktivací povol normální scroll. Větší pohyb long-press zruší.
+    if (!quickRsvp.active) {
+      if (distance > 12) {
+        clearQuickRsvpTimer();
+        quickRsvp.event = null;
+        quickRsvp.pointerId = null;
+      }
+      return;
+    }
+
+    ev.preventDefault();
+    updateQuickRsvpSelection(ev.clientX, ev.clientY);
+  });
+
+  element.addEventListener('pointerup', ev => {
+    if (ev.pointerType === 'mouse' || ev.pointerId !== quickRsvp.pointerId) return;
+
+    if (!quickRsvp.active) {
+      clearQuickRsvpTimer();
+      quickRsvp.event = null;
+      quickRsvp.pointerId = null;
+      return;
+    }
+
+    ev.preventDefault();
+    finishQuickRsvp();
+  });
+
+  element.addEventListener('pointercancel', ev => {
+    if (ev.pointerId === quickRsvp.pointerId) cancelQuickRsvp();
+  });
+
+  element.addEventListener('contextmenu', ev => {
+    if (canQuickRsvp(event)) ev.preventDefault();
+  });
+}
+
+function openEventFromTap(event) {
+  if (Date.now() < quickRsvp.suppressClickUntil) return;
+  openEvent(event);
+}
+
 function apiUrl(path) {
   const base = String(state.config.apiBase || '').replace(/\/$/, '');
   if (!base || base.includes('TVOJE-SUBDOMENA')) throw new Error('V config/config.json doplň adresu Cloudflare Worker API.');
@@ -150,7 +358,8 @@ function renderCalendar() {
       btn.className = `event-chip source-${sourceType(e)}`;
       const time = e.allDay ? 'celý den' : (e.startTime || '');
       btn.innerHTML = `<strong>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled ? availabilityHtml(e.id) : ''}`;
-      btn.addEventListener('click', () => openEvent(e));
+      attachQuickAttendance(btn, e);
+      btn.addEventListener('click', () => openEventFromTap(e));
       day.appendChild(btn);
     });
     cal.appendChild(day);
@@ -167,7 +376,9 @@ function renderUpcoming() {
     const btn = document.createElement('button');
     btn.className = 'upcoming-item';
     btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.startTime || 'celý den')}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
-    btn.addEventListener('click', ()=>openEvent(e)); box.appendChild(btn);
+    attachQuickAttendance(btn, e);
+    btn.addEventListener('click', ()=>openEventFromTap(e));
+    box.appendChild(btn);
   });
   if (!events.length) box.innerHTML = '<p class="empty">Žádné nadcházející události.</p>';
 }

@@ -228,3 +228,92 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
   .result-loss { background:#4a211f; color:#ffb0aa; border-color:#7a3732; }
   .result-draw { background:#252d39; color:#b4bdca; border-color:#3b4655; }
 }
+
+
+/* Mobilní rychlá volba účasti: dlouhé podržení události */
+.event-chip,
+.upcoming-item {
+  -webkit-touch-callout: none;
+}
+
+@media (pointer: coarse) {
+  .event-chip,
+  .upcoming-item {
+    /* Svislé scrollování stránky zůstává normální.
+       Long-press se aktivuje jen pokud prst 500 ms zůstane na místě. */
+    touch-action: pan-y;
+  }
+}
+
+.quick-rsvp-picker {
+  position: fixed;
+  z-index: 10000;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 7px;
+  padding: 8px;
+  width: min(286px, calc(100vw - 20px));
+  background: rgba(18, 24, 34, .96);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .30);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.quick-rsvp-option {
+  min-height: 52px;
+  border-radius: 11px;
+  border: 2px solid transparent;
+  font: inherit;
+  font-weight: 850;
+  font-size: .92rem;
+  cursor: default;
+  transition: transform .08s ease, border-color .08s ease, filter .08s ease;
+}
+
+.quick-rsvp-option.yes {
+  background: #dff4e5;
+  color: #17622d;
+}
+
+.quick-rsvp-option.maybe {
+  background: #fff1c8;
+  color: #795500;
+}
+
+.quick-rsvp-option.no {
+  background: #fde4e2;
+  color: #9b2924;
+}
+
+.quick-rsvp-option.selected {
+  transform: scale(1.06);
+  border-color: #fff;
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .20);
+}
+
+body.quick-rsvp-active {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (max-width: 360px) {
+  .quick-rsvp-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .quick-rsvp-option {
+    min-height: 50px;
+    padding-inline: 6px;
+    font-size: .84rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-rsvp-option {
+    transition: none;
+  }
+}
