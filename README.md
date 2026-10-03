@@ -1,221 +1,206 @@
-﻿# CurlingCalendar (CB BUTchers)
+﻿# CB BUTchers – týmový curling kalendář
 
-Jednoduchý týmový kalendář pro curling: zápasy z Excel/PDF/iCalu, ruční tréninky, přihlášení jménem + PINem a docházka Ano / Možná / Ne.
+Tento projekt je webová aplikace pro tým CB BUTchers. Slouží jako společný kalendář, seznam událostí, nástroj pro docházku a statistiky zápasů. Celý projekt je navržen tak, aby členové týmu měli v jednom místě přehled o plánovaných zápasech, trénincích a aktuální účasti.
 
-Projekt kombinuje statický frontend, Cloudflare Worker API a databázi D1. Umožňuje spravovat plán utkání, docházku a výsledky a zároveň exportovat události do `.ics`.
+## Co se děje na stránkách
 
-## Co projekt umí
+### 1) Hlavní stránka (`index.html`)
 
-- měsíční kalendář + seznam nejbližších událostí
-- filtry zdrojů (`excel`, `pdf`, `ical`, `manual`)
-- barevný přehled docházky (v kalendáři iniciály, v seznamu plná jména)
-- export viditelných událostí do `.ics`
-- přihlášení uživatele PINem a změna PINu
-- správa ručních tréninků (jen uživatelé s oprávněním)
-- zadávání výsledků zápasů `CB BUTchers : soupeř`
-- statistiky zápasů na stránce `stats.html`
-- mobilní long-press pro rychlou změnu účasti
+Na hlavní stránce se zobrazují:
+
+- měsíční kalendář s událostmi
+- filtry podle zdroje (`excel`, `pdf`, `ical`, `manual`)
+- seznam nejbližších událostí
+- detail konkrétní události po kliknutí
+- přehled účasti členů pro danou akci
+- tlačítka pro přihlášení, odhlášení, změnu PINu a export `.ics`
+
+Uživatel si zde může:
+
+- prohlížet zápasy a tréninky
+- zobrazit detaily události
+- označit svou účast jako Ano / Možná / Ne
+- přidat nebo smazat ruční trénink (pokud má oprávnění)
+- zadat výsledek zápasu a uložit ho do systému
+
+### 2) Stránka statistik (`stats.html`)
+
+Na stránce statistik se ukazují:
+
+- celkový počet zápasů, výher, proher a remíz
+- úspěšnost a skóre
+- rozdíl branek
+- forma posledních 5 utkání
+- statistiky podle soutěže
+- historie odehraných zápasů
+
+Tato stránka čte výsledky zápasů z API a zobrazuje je v přehledné tabulce a kartách.
+
+## Co projekt načítá
+
+### Události
+
+Aplikace načítá seznam událostí z API endpointu `GET /api/events`.
+
+Do kalendáře se načítá:
+
+- datum a čas události
+- název a popis
+- zdroj (`excel`, `pdf`, `ical`, `manual`)
+- typ události (zápas, trénink, apod.)
+- informace o výsledku, pokud zápas už má zaznamenaný výsledek
+
+Pokud API není dostupné, frontend se pokusí načíst fallback data z `data/events.json`.
+
+### Uživatelské účty
+
+Aplikace načítá seznam uživatelů z `GET /api/users`.
+
+V seznamu je možné vybrat jméno a přihlásit se PINem. Každý uživatel má:
+
+- unikátní `id`
+- jméno
+- PIN (uložený v hashované podobě)
+- příznak, zda může spravovat tréninky
+
+### Docházka
+
+Při otevření detailu události se načítá data o účasti z `GET /api/attendance?eventId=...` a přehled z `GET /api/attendance-summary`.
+
+Na stránce se pak zobrazuje:
+
+- kdo je přihlášen
+- kdo má Ano / Možná / Ne
+- celkový souhrn účasti na dané události
+
+### Výsledky zápasů
+
+Výsledky se načítají jako součást API pro události i zvlášť přes `GET /api/stats`.
+
+Zápas může mít:
+
+- skóre CB BUTchers : soupeř
+- poznámku ke zápasu
+- čas poslední úpravy
+
+## Co projekt ukládá
+
+### Docházka
+
+Při změně účasti se uloží data do D1 databáze přes endpoint `PUT /api/attendance`.
+
+Ukládá se:
+
+- `eventId`
+- `userId`
+- `status` (`yes`, `maybe`, `no`)
+- čas úpravy
+
+### Výsledky zápasů
+
+Výsledky zápasů se ukládají do tabulky `match_results` přes endpoint `PUT /api/results`.
+
+Ukládá se:
+
+- id zápasu
+- skóre pro CB BUTchers
+- skóre soupeře
+- poznámka
+- uživatel, který výsledek upravil
+- čas poslední změny
+
+Výsledek je oddělený od importovaných dat, takže se nevymaže ani nepřepíše při přepnutí nebo opětovném importu eventů.
+
+### Tréninky
+
+Ruční tréninky se zapisují přes `POST /api/trainings` a mažou přes `DELETE /api/trainings/:id`.
+
+Ukládají se pole jako:
+
+- datum
+- začátek a konec
+- místo a dráha
+- poznámka
+- zdroj typu `manual`
+
+### Session a přihlášení
+
+Po přihlášení se v prohlížeči uloží session token do `sessionStorage`. Tento token se používá pro autorizaci dalších požadavků na API.
+
+## Jak se používá aplikace
+
+### Přihlášení
+
+Uživatel vybere své jméno a zadá PIN. Poté se přihlásí do systému. Každý přihlášený člen může:
+
+- zobrazit kalendář
+- měnit svůj PIN
+- označit účast
+- zadat výsledek zápasu
+
+### Změna PINu
+
+Přihlášený uživatel může změnit svůj PIN v dialogu „Změnit PIN“.
+
+PIN se ověřuje proti uloženému hashu a saltu, ne v otevřené podobě.
+
+### Přístup pro správu tréninků
+
+Uživatelé s příznakem `can_manage_trainings` mohou přidávat a mazat ruční tréninky. To je odděleno od běžné účasti na zápasech.
+
+## Informace o datových zdrojích
+
+Projekt pracuje se zdroji:
+
+- Excel (`.xlsx`)
+- PDF
+- iCal/ICS
+- ruční data vytvořená v aplikaci
+
+Importní skript `scripts/build_events.py` z těchto zdrojů vytváří datovou sadu, která se pak použije pro kalendář.
 
 ## Struktura projektu
 
-- `index.html`, `app.js`, `styles.css` - statický frontend
-- `stats.html`, `stats.js`, `stats.css` - stránka se statistikami zápasů
-- `config/config.json` - název webu a `apiBase`
-- `scripts/build_events.py` - generátor `data/events.json` z Excel/PDF/iCal
-- `cloudflare/src/index.js` - Worker API
-- `cloudflare/migrations/0001_init.sql` - základní schema D1
-- `cloudflare/migrations/0002_match_results.sql` - tabulka pro výsledky zápasů
-- `cloudflare/users.example.json` - vzor pro nahrání uživatelů
+- `index.html` – hlavní stránka kalendáře
+- `app.js` – logika kalendáře, přihlášení, docházky, výsledků a exportu
+- `styles.css` – styl hlavní stránky
+- `stats.html` – stránka statistik
+- `stats.js` – výpočet a zobrazení statistik
+- `stats.css` – styl Statistik
+- `config/config.json` – základní konfigurace webu a API
+- `data/` – data pro fallback a import
+- `sources/` – zdrojové soubory pro import
+- `cloudflare/src/index.js` – API Worker
+- `cloudflare/migrations/` – SQL migrace pro databázi
+- `cloudflare/users.example.json` – vzor uživatelských dat
 
-## Zdroje ve složce `sources/`
+## Jaká data má projekt v sobě
 
-- `sources/Brnensky_pohar_2026_27.xlsx` - Brněnský pohár 2026/27
-- `sources/MCR_divize_2627.pdf` - MCR muži a ženy 2026/27 (divize)
-- automatický import se provádí přes `scripts/build_events.py`
+Projekt obsahuje:
 
-## Architektura
+- plánované zápasy a tréninky
+- seznam členů týmu
+- docházku jednotlivých členů
+- výsledky zápasů
+- souhrn statistik za sezonu
 
-- frontend může běžet jako statický web (např. GitHub Pages)
-- API běží na Cloudflare Workeru
-- data uživatelů, událostí a docházky jsou v Cloudflare D1
-- frontend při chybě API umí fallback na `data/events.json` (pouze pro události)
-- výsledky zápasů jsou ukládány do samostatné D1 tabulky, takže je automatický import nepřepíše
+Všechny tyto informace jsou propojené do jednoho rozhraní, aby tým nemusel pracovat ve více nástrojích.
 
-## Mobilní long-press účast
+## Bezpečnostní základ
 
-Aktualizace pro mobilní zařízení:
+- přihlášení je přes jméno a PIN
+- PIN se neukládá v čisté podobě
+- token přihlášení je uložen jen v prohlížeči
+- API omezuje přístup podle session tokenu a oprávnění
 
-1. Uživatel musí být přihlášený.
-2. Na telefonu dlouze podrží událost přibližně 500 ms.
-3. Objeví se volby Ano / Možná / Ne.
-4. Bez zvednutí prstu přejede na požadovanou volbu.
-5. Po puštění prstu se účast okamžitě uloží do D1.
-6. Krátký tap dál normálně otevře detail události.
-7. Pokud uživatel začne před uplynutím 500 ms scrollovat, long-press se zruší.
+## Shrnutí
 
-Poznámky:
+Aplikace je týmový curling kalendář, který:
 
-- funkce se aktivuje pouze u událostí, které mají `attendanceEnabled=true`
-- na desktopu zůstává chování beze změny
-- pokud telefon podporuje vibrace, při otevření a změně volby dostane uživatel jemnou haptickou odezvu
-- není potřeba měnit Worker, databázi ani spouštět migraci
+- načítá zápasy a tréninky z různých zdrojů,
+- zobrazuje je v kalendáři,
+- umožňuje členům přihlásit se a označit účast,
+- ukládá výsledky zápasů a statistiky,
+- poskytuje jednoduchý přehled pro celý tým.
 
-## Lokální spuštění frontendu
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar
-python -m http.server 8000
-```
-
-Potom otevři `http://localhost:8000`.
-
-## Import událostí (Excel/PDF/iCal)
-
-Instalace Python závislostí:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar
-pip install -r requirements.txt
-```
-
-Generování `data/events.json`:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar
-$env:ICAL_URL="https://..."
-python scripts/build_events.py
-```
-
-Poznámky:
-
-- iCal URL se bere z proměnné prostředí `ICAL_URL`
-- volitelně lze použít `GOOGLE_SHEET_XLSX_URL` pro vzdálený XLSX export
-- při chybě importu se drží poslední dostupná data pro daný zdroj
-
-## Cloudflare Worker + D1 setup
-
-V adresáři `cloudflare/`:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar\cloudflare
-npm install
-npx wrangler login
-npx wrangler d1 create cb-butchers-calendar
-```
-
-Do `cloudflare/wrangler.toml` doplň `database_id` a nastav `ALLOWED_ORIGINS`.
-
-Migrace DB:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar\cloudflare
-npm run db:migrate:remote
-```
-
-Nastav secrets:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar\cloudflare
-npx wrangler secret put SESSION_SECRET
-npx wrangler secret put PIN_PEPPER
-npx wrangler secret put ADMIN_TOKEN
-npx wrangler secret put IMPORT_TOKEN
-```
-
-Deploy Workeru:
-
-```powershell
-cd C:\Users\<uzivatel>\WebstormProjects\CurlingCalendar\cloudflare
-npm run deploy
-```
-
-Pak nastav `config/config.json` -> `apiBase` na URL Workeru.
-
-## Uživatelé a PINy
-
-Uprav `cloudflare/users.example.json` a nahraj přes admin endpoint:
-
-```powershell
-curl -X POST "https://TVE-API.workers.dev/api/admin/users" ^
-  -H "Authorization: ******" ^
-  -H "Content-Type: application/json" ^
-  --data-binary "@cloudflare/users.example.json"
-```
-
-- PIN musí mít 4 až 12 číslic
-- v DB se ukládá hash + salt (+ serverový pepper), ne otevřený PIN
-
-## Výsledky zápasů + statistiky
-
-Přidána funkce pro evidenci výsledků zápasů:
-
-- výsledek lze po přihlášení zadat pro konkrétní zápas ve formátu `CB BUTchers : soupeř`
-- výsledek je uložen v samostatné D1 tabulce, takže ho automatický import nepřepíše
-- výsledek se ukazuje přímo v kalendáři a v seznamu nejbližších událostí
-- nová stránka `stats.html` obsahuje:
-  - počet zápasů, výher, proher, remíz
-  - úspěšnost výher
-  - celkové skóre a rozdíl
-  - formu posledních 5 zápasů
-  - statistiky podle soutěže
-  - historii odehraných zápasů
-
-Důležité pro upgrade:
-
-1. Nahraď:
-   - `index.html`
-   - `app.js`
-   - `styles.css`
-   - `cloudflare/src/index.js`
-2. Přidej:
-   - `stats.html`
-   - `stats.js`
-   - `stats.css`
-   - `cloudflare/migrations/0002_match_results.sql`
-3. Jednou spusť migraci:
-
-```powershell
-cd cloudflare
-npm run db:migrate:remote
-```
-
-4. Commit a push do `main`.
-
-Oprávnění:
-
-- výsledek může v této verzi zapsat nebo změnit kterýkoli přihlášený člen týmu
-- později lze jednoduše omezit úpravu výsledků jen na kapitána
-
-## API endpointy (aktuální)
-
-- `GET /api/health`
-- `GET /api/users`
-- `POST /api/login`
-- `GET /api/me`
-- `POST /api/change-pin`
-- `GET /api/events`
-- `GET /api/attendance?eventId=...`
-- `GET /api/attendance-summary`
-- `PUT /api/attendance`
-- `POST /api/trainings`
-- `DELETE /api/trainings/:id`
-- `POST /api/import`
-- `POST /api/admin/users`
-
-## Bezpečnostní pravidla
-
-- nikdy neukládej `SESSION_SECRET`, `PIN_PEPPER`, `ADMIN_TOKEN`, `IMPORT_TOKEN` do repozitáře
-- `ALLOWED_ORIGINS` omez jen na konkrétní domény
-- `users.example.json` ber jako dočasný importní soubor (po produkčním importu v něm nenechávej reálné PINy)
-- session token je uložen jen v `sessionStorage`
-
-## Poznámka k D1 bindingu
-
-Worker podporuje obě varianty názvu bindingu:
-
-- `env.DB`
-- `env.cb_butchers_calendar`
-
-## Poznámka
-
-Tento backend vychází i z předchozí opravy importu, která zachovává docházku při aktualizaci Excel/PDF/iCal.
+Cílem projektu není jen plánování, ale i evidování týmové aktivity v jednom systému.
