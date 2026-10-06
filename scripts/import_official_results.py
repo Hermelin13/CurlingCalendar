@@ -18,11 +18,10 @@ DATA_FILE = ROOT / "data" / "events.json"
 TEAM = "CB BUTchers"
 
 DATE_RE = re.compile(
-    r"(?P<date>\d{1,2}\.\s*\d{1,2}\.\s*\d{4})"
-    r"\s+(?P<time>\d{1,2}:\d{2})"
-    r"\s+dráha\s+(?P<rink>[A-Za-z0-9]+)",
+    r"(?<!\\d)(?P<date>\\d{1,2}\\.\\s*\\d{1,2}\\.\\s*\\d{4})(?!\\d)",
     re.I,
 )
+
 
 
 def compact(value: str | None) -> str:
@@ -64,12 +63,19 @@ def parse_score(value: str | None) -> int | None:
     return int(text)
 
 
-def nearest_match_context(table) -> tuple[str, str, str] | None:
-    # Datum/čas/dráha jsou na stránce před tabulkou zápasu.
-    for node in table.find_all_previous(string=True, limit=250):
+def nearest_match_date(table) -> str | None:
+    """
+    Najde nejbližší datum před výsledkovou tabulkou.
+
+    Čas ani dráha se nepoužívají. Na výsledkovém webu jsou datum,
+    čas a dráha často rozdělené do více HTML elementů, takže není
+    spolehlivé vyžadovat je v jednom textu.
+    """
+    for node in table.find_all_previous(string=True, limit=500):
         text = compact(str(node))
-        if not text or len(text) > 180:
+        if not text or len(text) > 250:
             continue
+
         match = DATE_RE.search(text)
         if not match:
             continue
@@ -78,13 +84,9 @@ def nearest_match_context(table) -> tuple[str, str, str] | None:
             re.sub(r"\s+", "", match.group("date")),
             "%d.%m.%Y",
         )
-        return (
-            parsed.strftime("%Y-%m-%d"),
-            match.group("time"),
-            match.group("rink"),
-        )
-    return None
+        return parsed.strftime("%Y-%m-%d")
 
+    return None
 
 def parse_official_page(html: str, team_name: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
@@ -154,12 +156,10 @@ def parse_official_page(html: str, team_name: str) -> list[dict]:
         if not opponent:
             continue
 
-        context = nearest_match_context(table)
-        if not context:
-            print(f"VAROVÁNÍ: neumím zjistit datum/čas u zápasu vs {opponent['team']}")
+        date_str = nearest_match_date(table)
+        if not date_str:
+            print(f"VAROVÁNÍ: neumím zjistit datum u zápasu vs {opponent['team']}")
             continue
-
-        date_str, start_time, rink = context
 
         # Nejdřív použijeme značku * přímo z výsledkové stránky.
         # Kdyby ji HTML někdy přestalo obsahovat jako text, fallback je součet LSD:
@@ -179,8 +179,6 @@ def parse_official_page(html: str, team_name: str) -> list[dict]:
 
         matches.append({
             "date": date_str,
-            "startTime": start_time,
-            "rink": rink,
             "team": our["team"],
             "opponent": opponent["team"],
             "ourScore": our["score"],
@@ -196,6 +194,13 @@ def parse_official_page(html: str, team_name: str) -> list[dict]:
 
 
 def match_event_id(result: dict, events: list[dict]) -> str | None:
+    """
+    Párování výsledku s kalendářem:
+    - stejné datum
+    - stejný soupeř
+
+    Čas ani dráha nejsou podmínkou.
+    """
     candidates = [
         e for e in events
         if (e.get("type") == "match" or e.get("opponent"))
@@ -205,35 +210,30 @@ def match_event_id(result: dict, events: list[dict]) -> str | None:
     if not candidates:
         return None
 
-    same_time = [
-        e for e in candidates
-        if compact(e.get("startTime")) == compact(result["startTime"])
-    ]
-
-    pool = same_time or candidates
-
-    exact_opponent = [
-        e for e in pool
-        if norm_name(e.get("opponent")) == norm_name(result["opponent"])
-    ]
-    if len(exact_opponent) == 1:
-        return exact_opponent[0]["id"]
-
-    # U našeho týmu je v jednom čase typicky jen jeden zápas.
-    # To zároveň řeší rozdíly typu zkrácený/plný název soupeře mezi PDF a IS ČSC.
-    if len(pool) == 1:
-        return pool[0]["id"]
-
-    # Poslední fallback: datum + soupeř, i kdyby se čas v jednom zdroji lišil.
-    exact_on_date = [
+    exact = [
         e for e in candidates
         if norm_name(e.get("opponent")) == norm_name(result["opponent"])
     ]
-    if len(exact_on_date) == 1:
-        return exact_on_date[0]["id"]
+    if len(exact) == 1:
+        return exact[0]["id"]
+
+    # Fallback pro lehce odlišné názvy týmů mezi zdroji.
+    wanted = norm_name(result["opponent"])
+    fuzzy = []
+    for e in candidates:
+        opponent = norm_name(e.get("opponent"))
+        if opponent and wanted and (opponent in wanted or wanted in opponent):
+            fuzzy.append(e)
+
+    if len(fuzzy) == 1:
+        return fuzzy[0]["id"]
+
+    # Pokud je v daný den v našem kalendáři jen jeden zápas,
+    # je bezpečnější vzít ho než blokovat import kvůli názvu soupeře.
+    if len(candidates) == 1:
+        return candidates[0]["id"]
 
     return None
-
 
 def main() -> None:
     cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -269,7 +269,7 @@ def main() -> None:
         if not event_id:
             print(
                 "VAROVÁNÍ: nenašel jsem událost v kalendáři pro "
-                f"{result['date']} {result['startTime']} vs {result['opponent']}"
+                f"{result['date']} vs {result['opponent']}"
             )
             continue
 
