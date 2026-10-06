@@ -726,11 +726,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-7345ae3fa474",
+    "id": "excel-40ce4a9935a5",
     "type": "match",
-    "title": "CB BUTchers vs Prasklej hrníček",
+    "title": "CB BUTchers vs Prasklej hrnÃ­Äek",
     "team": "CB BUTchers",
-    "opponent": "Prasklej hrníček",
+    "opponent": "Prasklej hrnÃ­Äek",
     "date": "2027-01-20",
     "startTime": "20:00",
     "endTime": null,
@@ -836,11 +836,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-7b2ce13bac6e",
+    "id": "excel-cf96ac9735b5",
     "type": "match",
-    "title": "CB BUTchers vs CB Průjezd",
+    "title": "CB BUTchers vs CB PrÅ¯jezd",
     "team": "CB BUTchers",
-    "opponent": "CB Průjezd",
+    "opponent": "CB PrÅ¯jezd",
     "date": "2027-02-17",
     "startTime": "20:00",
     "endTime": null,
@@ -924,11 +924,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-bbf422a30425",
+    "id": "excel-b09dc68adba6",
     "type": "match",
-    "title": "CB BUTchers vs Ovečky a Bača",
+    "title": "CB BUTchers vs OveÄky a BaÄa",
     "team": "CB BUTchers",
-    "opponent": "Ovečky a Bača",
+    "opponent": "OveÄky a BaÄa",
     "date": "2027-03-10",
     "startTime": "20:00",
     "endTime": null,
@@ -946,11 +946,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-5cd4856a6c4a",
+    "id": "excel-b1168f4fa454",
     "type": "match",
-    "title": "CB BUTchers vs CB Junioři",
+    "title": "CB BUTchers vs CB JunioÅi",
     "team": "CB BUTchers",
-    "opponent": "CB Junioři",
+    "opponent": "CB JunioÅi",
     "date": "2027-03-17",
     "startTime": "18:00",
     "endTime": null,
