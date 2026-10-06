@@ -3,10 +3,9 @@
     "name": "Brněnský pohár – Google Sheets",
     "spreadsheetId": "17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY",
     "gid": 116203339,
-    "csvUrl": "https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/gviz/tq?tqx=out:csv&gid=116203339",
+    "csvUrl": "https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/export?format=csv&gid=116203339",
     "competition": "Brněnský pohár",
-    "location": "Curling Brno",
-    "fallbackCsvUrl": "https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/export?format=csv&gid=116203339"
+    "location": "Curling Brno"
   },
   "pdf": {
     "path": "sources/MCR_divize_2627.pdf",
@@ -15,5 +14,10 @@
   "ical": {
     "name": "Curling Brno EOS",
     "urlFromEnvironment": "ICAL_URL"
+  },
+  "officialResults": {
+    "name": "Výsledky ČSC – MČR divize",
+    "team": "CB BUTchers",
+    "url": "https://vysledky.curling.cz/match/default/played?seasonId=6&leagueId=351"
   }
 }

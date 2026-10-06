@@ -72,6 +72,12 @@ jobs:
             --data-binary @/tmp/import.json \
             "$API_BASE/api/import"
 
+      - name: Import official results and LSD
+        env:
+          API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
+          IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
+        run: python scripts/import_official_results.py
+
       - name: Commit events.json
         run: |
           if git diff --quiet -- data/events.json; then

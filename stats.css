@@ -7,7 +7,7 @@
 }
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
 }
 .stat-card {
@@ -33,7 +33,7 @@
 .form-loss { background:#fdebea; color:var(--no); border-color:#e6b1ad; }
 .form-draw { background:#eef1f5; color:#626d7d; border-color:#d6dce4; }
 .table-wrap { overflow-x:auto; }
-.stats-table { width:100%; border-collapse:collapse; min-width:650px; }
+.stats-table { width:100%; border-collapse:collapse; min-width:720px; }
 .stats-table th, .stats-table td { padding:10px 9px; border-bottom:1px solid var(--line); text-align:left; font-size:.83rem; }
 .stats-table th { color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
 .match-result { display:inline-flex; min-width:48px; justify-content:center; padding:5px 8px; border-radius:999px; font-weight:900; }

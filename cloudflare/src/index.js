@@ -73,6 +73,10 @@ export default {
         if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
         return importEvents(request, env, cors.headers);
       }
+      if (url.pathname === '/api/import-results' && request.method === 'POST') {
+        if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
+        return importOfficialResults(request, env, cors.headers);
+      }
       if (url.pathname === '/api/admin/users' && request.method === 'POST') {
         if (!secretBearerMatches(request, env.ADMIN_TOKEN)) return json({ error: 'Neplatný admin token.' }, 401, cors.headers);
         return upsertUsers(request, env, cors.headers);
@@ -163,7 +167,12 @@ async function requireUser(request, env) {
 
 async function listEvents(env, headers) {
   const { results } = await db(env).prepare(`
-    SELECT e.payload_json, r.our_score, r.opponent_score, r.note, r.updated_at AS result_updated_at
+    SELECT e.payload_json,
+           r.our_score, r.opponent_score, r.note,
+           r.lsd_advantage, r.our_lsd1, r.our_lsd2,
+           r.opponent_lsd1, r.opponent_lsd2,
+           r.result_source, r.source_url,
+           r.updated_at AS result_updated_at
     FROM events e
            LEFT JOIN match_results r ON r.event_id=e.id
     ORDER BY e.date, COALESCE(e.start_time, ''), e.id
@@ -177,6 +186,15 @@ async function listEvents(env, headers) {
         ourScore: Number(row.our_score),
         opponentScore: Number(row.opponent_score),
         note: row.note || null,
+        lsdAdvantage: row.lsd_advantage === null || row.lsd_advantage === undefined
+          ? null
+          : Boolean(row.lsd_advantage),
+        ourLsd1: row.our_lsd1 === null || row.our_lsd1 === undefined ? null : Number(row.our_lsd1),
+        ourLsd2: row.our_lsd2 === null || row.our_lsd2 === undefined ? null : Number(row.our_lsd2),
+        opponentLsd1: row.opponent_lsd1 === null || row.opponent_lsd1 === undefined ? null : Number(row.opponent_lsd1),
+        opponentLsd2: row.opponent_lsd2 === null || row.opponent_lsd2 === undefined ? null : Number(row.opponent_lsd2),
+        source: row.result_source || null,
+        sourceUrl: row.source_url || null,
         updatedAt: row.result_updated_at || null
       };
     }
@@ -211,13 +229,15 @@ async function saveResult(request, env, user, headers) {
   }
 
   await db(env).prepare(`
-    INSERT INTO match_results(event_id,our_score,opponent_score,note,updated_by,updated_at)
-    VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
+    INSERT INTO match_results(event_id,our_score,opponent_score,note,updated_by,result_source,source_url,updated_at)
+    VALUES(?,?,?,?,?,'manual',NULL,CURRENT_TIMESTAMP)
       ON CONFLICT(event_id) DO UPDATE SET
       our_score=excluded.our_score,
                                  opponent_score=excluded.opponent_score,
                                  note=excluded.note,
                                  updated_by=excluded.updated_by,
+                                 result_source='manual',
+                                 source_url=NULL,
                                  updated_at=CURRENT_TIMESTAMP
   `).bind(eventId, ourScore, opponentScore, note, user.id).run();
 
@@ -237,7 +257,10 @@ async function deleteResult(url, env, headers) {
 async function getStats(env, headers) {
   const { results } = await db(env).prepare(`
     SELECT e.id, e.date, e.start_time, e.payload_json,
-           r.our_score, r.opponent_score, r.note, r.updated_at
+           r.our_score, r.opponent_score, r.note,
+           r.lsd_advantage, r.our_lsd1, r.our_lsd2,
+           r.opponent_lsd1, r.opponent_lsd2,
+           r.result_source, r.source_url, r.updated_at
     FROM events e
            JOIN match_results r ON r.event_id=e.id
     ORDER BY e.date DESC, COALESCE(e.start_time, '') DESC, e.id DESC
@@ -247,6 +270,7 @@ async function getStats(env, headers) {
   const competitions = {};
 
   let wins = 0, losses = 0, draws = 0, pointsFor = 0, pointsAgainst = 0;
+  let lsdKnown = 0, lsdAdvantages = 0;
 
   for (const row of results) {
     let event;
@@ -264,12 +288,21 @@ async function getStats(env, headers) {
     pointsFor += ourScore;
     pointsAgainst += opponentScore;
 
+    const lsdAdvantage = row.lsd_advantage === null || row.lsd_advantage === undefined
+      ? null
+      : Boolean(row.lsd_advantage);
+    if (lsdAdvantage !== null) {
+      lsdKnown++;
+      if (lsdAdvantage) lsdAdvantages++;
+    }
+
     const competition = event.competition || sourceStatsLabel(event?.source?.type);
     if (!competitions[competition]) {
       competitions[competition] = {
         competition,
         played: 0, wins: 0, losses: 0, draws: 0,
-        pointsFor: 0, pointsAgainst: 0
+        pointsFor: 0, pointsAgainst: 0,
+        lsdKnown: 0, lsdAdvantages: 0
       };
     }
     const c = competitions[competition];
@@ -277,6 +310,10 @@ async function getStats(env, headers) {
     c[outcome === 'win' ? 'wins' : outcome === 'loss' ? 'losses' : 'draws']++;
     c.pointsFor += ourScore;
     c.pointsAgainst += opponentScore;
+    if (lsdAdvantage !== null) {
+      c.lsdKnown++;
+      if (lsdAdvantage) c.lsdAdvantages++;
+    }
 
     matches.push({
       id: event.id,
@@ -288,7 +325,14 @@ async function getStats(env, headers) {
       ourScore,
       opponentScore,
       outcome,
-      note: row.note || null
+      note: row.note || null,
+      lsdAdvantage,
+      ourLsd1: row.our_lsd1 === null || row.our_lsd1 === undefined ? null : Number(row.our_lsd1),
+      ourLsd2: row.our_lsd2 === null || row.our_lsd2 === undefined ? null : Number(row.our_lsd2),
+      opponentLsd1: row.opponent_lsd1 === null || row.opponent_lsd1 === undefined ? null : Number(row.opponent_lsd1),
+      opponentLsd2: row.opponent_lsd2 === null || row.opponent_lsd2 === undefined ? null : Number(row.opponent_lsd2),
+      resultSource: row.result_source || null,
+      sourceUrl: row.source_url || null
     });
   }
 
@@ -297,7 +341,8 @@ async function getStats(env, headers) {
       .map(c => ({
         ...c,
         difference: c.pointsFor - c.pointsAgainst,
-        winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0
+        winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0,
+        lsdPct: c.lsdKnown ? Math.round((c.lsdAdvantages / c.lsdKnown) * 1000) / 10 : 0
       }))
       .sort((a,b) => b.played - a.played || a.competition.localeCompare(b.competition, 'cs'));
 
@@ -310,7 +355,10 @@ async function getStats(env, headers) {
       pointsFor,
       pointsAgainst,
       difference: pointsFor - pointsAgainst,
-      winPct: played ? Math.round((wins / played) * 1000) / 10 : 0
+      winPct: played ? Math.round((wins / played) * 1000) / 10 : 0,
+      lsdKnown,
+      lsdAdvantages,
+      lsdPct: lsdKnown ? Math.round((lsdAdvantages / lsdKnown) * 1000) / 10 : 0
     },
     form: matches.slice(0, 5).map(m => m.outcome),
     competitions: competitionRows,
@@ -451,6 +499,106 @@ async function importEvents(request, env, headers) {
     ok: true,
     imported: cleanEvents.length,
     removed: staleIds.length
+  }, 200, headers);
+}
+
+async function importOfficialResults(request, env, headers) {
+  const body = await readJson(request);
+  const results = Array.isArray(body) ? body : body.results;
+
+  if (!Array.isArray(results) || results.length > 200) {
+    return json({ error: 'Očekávám pole results (max. 200 položek).' }, 400, headers);
+  }
+
+  const database = db(env);
+  const statements = [];
+  let skipped = 0;
+
+  for (const item of results) {
+    const eventId = String(item?.eventId || '').trim();
+    const ourScore = Number(item?.ourScore);
+    const opponentScore = Number(item?.opponentScore);
+
+    if (!eventId ||
+        !Number.isInteger(ourScore) || !Number.isInteger(opponentScore) ||
+        ourScore < 0 || ourScore > 99 ||
+        opponentScore < 0 || opponentScore > 99) {
+      skipped++;
+      continue;
+    }
+
+    const eventRow = await database.prepare(
+      'SELECT payload_json FROM events WHERE id=?'
+    ).bind(eventId).first();
+
+    if (!eventRow) {
+      skipped++;
+      continue;
+    }
+
+    let event;
+    try { event = JSON.parse(eventRow.payload_json); }
+    catch {
+      skipped++;
+      continue;
+    }
+
+    if (event.type !== 'match' && !event.opponent) {
+      skipped++;
+      continue;
+    }
+
+    const lsdAdvantage =
+      item.lsdAdvantage === true ? 1 :
+      item.lsdAdvantage === false ? 0 :
+      null;
+
+    const numberOrNull = value => {
+      if (value === null || value === undefined || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    statements.push(database.prepare(`
+      INSERT INTO match_results(
+        event_id, our_score, opponent_score, note, updated_by,
+        lsd_advantage, our_lsd1, our_lsd2, opponent_lsd1, opponent_lsd2,
+        result_source, source_url, updated_at
+      )
+      VALUES(?,?,?,NULL,NULL,?,?,?,?,?,'official',?,CURRENT_TIMESTAMP)
+      ON CONFLICT(event_id) DO UPDATE SET
+        our_score=excluded.our_score,
+        opponent_score=excluded.opponent_score,
+        lsd_advantage=excluded.lsd_advantage,
+        our_lsd1=excluded.our_lsd1,
+        our_lsd2=excluded.our_lsd2,
+        opponent_lsd1=excluded.opponent_lsd1,
+        opponent_lsd2=excluded.opponent_lsd2,
+        result_source='official',
+        source_url=excluded.source_url,
+        updated_by=NULL,
+        updated_at=CURRENT_TIMESTAMP
+    `).bind(
+      eventId,
+      ourScore,
+      opponentScore,
+      lsdAdvantage,
+      numberOrNull(item.ourLsd1),
+      numberOrNull(item.ourLsd2),
+      numberOrNull(item.opponentLsd1),
+      numberOrNull(item.opponentLsd2),
+      clean(item.sourceUrl, 500)
+    ));
+  }
+
+  for (let i = 0; i < statements.length; i += 50) {
+    await database.batch(statements.slice(i, i + 50));
+  }
+
+  return json({
+    ok: true,
+    imported: statements.length,
+    skipped
   }, 200, headers);
 }
 

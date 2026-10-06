@@ -33,6 +33,7 @@ function render(data) {
     ['Úspěšnost', `${s.winPct ?? 0} %`],
     ['Skóre', `${s.pointsFor ?? 0}:${s.pointsAgainst ?? 0}`],
     ['Rozdíl', `${(s.difference ?? 0) > 0 ? '+' : ''}${s.difference ?? 0}`],
+    ['Výhoda z LSD', `${s.lsdAdvantages ?? 0} / ${s.lsdKnown ?? 0}`],
   ];
   $('#summary-cards').innerHTML = cards.map(([label,value]) =>
     `<article class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`
@@ -52,7 +53,8 @@ function render(data) {
       <td data-label="Skóre">${c.pointsFor}:${c.pointsAgainst}</td>
       <td data-label="+/-">${c.difference > 0 ? '+' : ''}${c.difference}</td>
       <td data-label="Úspěšnost">${c.winPct} %</td>
-    </tr>`).join('') || '<tr><td colspan="8" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
+      <td data-label="LSD výhoda">${c.lsdAdvantages ?? 0}/${c.lsdKnown ?? 0}</td>
+    </tr>`).join('') || '<tr><td colspan="9" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
 
   $('#matches-body').innerHTML = (data.matches || []).map(m => `
     <tr class="match-row">
