@@ -330,6 +330,28 @@
     "attendanceEnabled": true
   },
   {
+    "id": "ical-b268c46574c7",
+    "type": "training",
+    "title": "Trénink Roztyly",
+    "team": "CB BUTchers",
+    "opponent": null,
+    "date": "2026-11-06",
+    "startTime": "19:00",
+    "endTime": "20:00",
+    "allDay": false,
+    "location": "Praha Roztyly, Komárkova ev. č. 12, Chodov, 14800 Praha, Česko",
+    "rink": null,
+    "competition": null,
+    "description": "zástupci MČR týmů",
+    "source": {
+      "type": "ical",
+      "name": "Curling Brno EOS",
+      "url": null
+    },
+    "editable": false,
+    "attendanceEnabled": true
+  },
+  {
     "id": "ical-249a37e6c669",
     "type": "event",
     "title": "MČR divize v Brně",
