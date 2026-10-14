@@ -79,7 +79,10 @@ def parse_google_sheet(cfg: dict) -> list[dict]:
             response.raise_for_status()
 
             content_type = (response.headers.get("content-type") or "").lower()
-            text = response.text
+
+            # Google CSV je UTF-8. requests někdy odhadne ISO-8859-1,
+            # což způsobí mojibake typu "Prasklej hrnÃ­Äek".
+            text = response.content.decode("utf-8-sig")
 
             if "text/html" in content_type or "<html" in text[:500].lower():
                 raise RuntimeError(
@@ -133,6 +136,21 @@ def parse_google_sheet(cfg: dict) -> list[dict]:
         except Exception:
             return None
 
+    def date_from_header_row(row_index: int):
+        """
+        Datum hledej v CELÉM hlavičkovém řádku "Dráha - Čas".
+        Google CSV může kvůli formátování/merged buňkám datum posunout
+        jinam než přesně do sousedního sloupce.
+        """
+        if row_index < 0 or row_index >= len(rows):
+            return None
+
+        for value in rows[row_index]:
+            parsed = parse_date_value(str(value or ""))
+            if parsed:
+                return parsed
+        return None
+
     # Skutečný řádek zápasu. Tabulky pořadí tento formát nemají.
     time_re = re.compile(
         r"^\s*(?:dráha\s*)?([A-ZÁ-Ž]|\d+)\s*[-–—]\s*"
@@ -178,10 +196,20 @@ def parse_google_sheet(cfg: dict) -> list[dict]:
 
             # Hlavička bloku: "Dráha - Čas" | datum
             if norm(value) == norm("Dráha - Čas"):
-                # Datum je v sousedním sloupci, kde jsou jinak názvy týmů.
-                parsed_date = parse_date_value(cell(r, time_col + 1))
+                # Datum nemusí být po CSV exportu přesně v sousední buňce.
+                # Proto ho hledáme jen v tomto hlavičkovém řádku, ale napříč sloupci.
+                parsed_date = date_from_header_row(r)
                 if parsed_date:
                     current_dates[time_col] = parsed_date
+                    print(
+                        f"Google CSV: řádek {r + 1}, datum bloku "
+                        f"{parsed_date.isoformat()}"
+                    )
+                else:
+                    print(
+                        f"VAROVÁNÍ: řádek {r + 1} je hlavička rozpisu, "
+                        f"ale datum v ní nebylo rozpoznáno: {rows[r][:12]}"
+                    )
                 continue
 
             m = time_re.match(value)
@@ -218,7 +246,7 @@ def parse_google_sheet(cfg: dict) -> list[dict]:
             if not match_date:
                 for rr in range(r, max(-1, r - 30), -1):
                     if norm(cell(rr, time_col)) == norm("Dráha - Čas"):
-                        match_date = parse_date_value(cell(rr, time_col + 1))
+                        match_date = date_from_header_row(rr)
                         if match_date:
                             current_dates[time_col] = match_date
                             break
