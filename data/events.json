@@ -264,28 +264,6 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-5e076b45e873",
-    "type": "match",
-    "title": "CB BUTchers vs CB Permafrost",
-    "team": "CB BUTchers",
-    "opponent": "CB Permafrost",
-    "date": "2026-10-21",
-    "startTime": "20:00",
-    "endTime": null,
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": "B",
-    "competition": "Brněnský pohár",
-    "description": null,
-    "source": {
-      "type": "excel",
-      "name": "Brněnský pohár – Google Sheets",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
     "id": "ical-0cef1073c994",
     "type": "training",
     "title": "Trénink Roztyly",
