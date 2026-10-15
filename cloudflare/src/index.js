@@ -548,6 +548,10 @@ async function importOfficialResults(request, env, headers) {
       continue;
     }
 
+    const requestedResultSource = String(item?.resultSource || 'official').trim();
+    const resultSource =
+      requestedResultSource === 'google_sheet' ? 'google_sheet' : 'official';
+
     const lsdAdvantage =
       item.lsdAdvantage === true ? 1 :
       item.lsdAdvantage === false ? 0 :
@@ -565,16 +569,31 @@ async function importOfficialResults(request, env, headers) {
         lsd_advantage, our_lsd1, our_lsd2, opponent_lsd1, opponent_lsd2,
         result_source, source_url, updated_at
       )
-      VALUES(?,?,?,NULL,NULL,?,?,?,?,?,'official',?,CURRENT_TIMESTAMP)
+      VALUES(?,?,?,NULL,NULL,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
       ON CONFLICT(event_id) DO UPDATE SET
         our_score=excluded.our_score,
         opponent_score=excluded.opponent_score,
-        lsd_advantage=excluded.lsd_advantage,
-        our_lsd1=excluded.our_lsd1,
-        our_lsd2=excluded.our_lsd2,
-        opponent_lsd1=excluded.opponent_lsd1,
-        opponent_lsd2=excluded.opponent_lsd2,
-        result_source='official',
+        lsd_advantage=CASE
+          WHEN excluded.result_source='official' THEN excluded.lsd_advantage
+          ELSE match_results.lsd_advantage
+        END,
+        our_lsd1=CASE
+          WHEN excluded.result_source='official' THEN excluded.our_lsd1
+          ELSE match_results.our_lsd1
+        END,
+        our_lsd2=CASE
+          WHEN excluded.result_source='official' THEN excluded.our_lsd2
+          ELSE match_results.our_lsd2
+        END,
+        opponent_lsd1=CASE
+          WHEN excluded.result_source='official' THEN excluded.opponent_lsd1
+          ELSE match_results.opponent_lsd1
+        END,
+        opponent_lsd2=CASE
+          WHEN excluded.result_source='official' THEN excluded.opponent_lsd2
+          ELSE match_results.opponent_lsd2
+        END,
+        result_source=excluded.result_source,
         source_url=excluded.source_url,
         updated_by=NULL,
         updated_at=CURRENT_TIMESTAMP
@@ -587,6 +606,7 @@ async function importOfficialResults(request, env, headers) {
       numberOrNull(item.ourLsd2),
       numberOrNull(item.opponentLsd1),
       numberOrNull(item.opponentLsd2),
+      resultSource,
       clean(item.sourceUrl, 500)
     ));
   }
