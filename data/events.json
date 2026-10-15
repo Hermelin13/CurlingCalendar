@@ -242,11 +242,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-991ad68ed3a3",
+    "id": "excel-0cf07f371a00",
     "type": "match",
-    "title": "CB BUTchers vs CB juniorky",
+    "title": "CB BUTchers vs CB Junioři 2",
     "team": "CB BUTchers",
-    "opponent": "CB juniorky",
+    "opponent": "CB Junioři 2",
     "date": "2026-10-21",
     "startTime": "18:00",
     "endTime": null,
@@ -946,11 +946,11 @@
     "attendanceEnabled": true
   },
   {
-    "id": "excel-5cd4856a6c4a",
+    "id": "excel-cf366fe0c543",
     "type": "match",
-    "title": "CB BUTchers vs CB Junioři",
+    "title": "CB BUTchers vs CB Junioři 1",
     "team": "CB BUTchers",
-    "opponent": "CB Junioři",
+    "opponent": "CB Junioři 1",
     "date": "2027-03-17",
     "startTime": "18:00",
     "endTime": null,
