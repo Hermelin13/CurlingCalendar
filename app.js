@@ -1,10 +1,23 @@
+const SESSION_KEY = 'cbSession';
+
+// Přihlášení držíme i po zavření prohlížeče.
+// Zároveň jednorázově převedeme starý token ze sessionStorage,
+// aby se uživatel po nasazení změny nemusel znovu přihlašovat.
+const storedSessionToken =
+  localStorage.getItem(SESSION_KEY) ||
+  sessionStorage.getItem(SESSION_KEY) ||
+  '';
+
+if (storedSessionToken) localStorage.setItem(SESSION_KEY, storedSessionToken);
+sessionStorage.removeItem(SESSION_KEY);
+
 const state = {
   config: null,
   events: [],
   users: [],
   month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   user: null,
-  token: sessionStorage.getItem('cbSession') || '',
+  token: storedSessionToken,
   selectedEvent: null,
   attendanceSummary: {},
   filters: new Set(['excel', 'pdf', 'ical', 'manual']),
@@ -542,7 +555,7 @@ async function deleteManualEvent(event) {
 
 async function login(userId, pin) {
   const body = await api('/api/login', { method:'POST', body:JSON.stringify({ userId, pin }) });
-  state.token = body.token; state.user = body.user; sessionStorage.setItem('cbSession', body.token); updateLoginUI();
+  state.token = body.token; state.user = body.user; localStorage.setItem(SESSION_KEY, body.token); updateLoginUI();
 }
 
 async function changePin(currentPin, newPin) {
@@ -599,12 +612,22 @@ function exportCalendar() {
 async function restoreLogin() {
   if (!state.token) return updateLoginUI();
   try { const body = await api('/api/me', { method:'GET' }); state.user=body.user; }
-  catch (_) { state.token=''; state.user=null; sessionStorage.removeItem('cbSession'); }
+  catch (_) {
+    state.token='';
+    state.user=null;
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  }
   updateLoginUI();
 }
 
 function logout(toast=true) {
-  state.token=''; state.user=null; sessionStorage.removeItem('cbSession'); updateLoginUI(); if (toast) showToast('Odhlášeno.');
+  state.token='';
+  state.user=null;
+  localStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_KEY);
+  updateLoginUI();
+  if (toast) showToast('Odhlášeno.');
 }
 
 function renderUserSelect() {
