@@ -251,6 +251,67 @@ def find_event_id(result: dict, events: list[dict]) -> str | None:
     return None
 
 
+def load_current_results(api_base: str) -> dict[str, tuple[int, int]]:
+    """Vrátí aktuální skóre z D1 podle event_id."""
+    response = requests.get(
+        f"{api_base}/api/events",
+        timeout=45,
+    )
+    response.raise_for_status()
+
+    body = response.json()
+    events = body.get("events") if isinstance(body, dict) else None
+    if not isinstance(events, list):
+        raise RuntimeError("API /api/events vrátilo nečekaný formát.")
+
+    current: dict[str, tuple[int, int]] = {}
+    for event in events:
+        result = event.get("result") or {}
+        if (
+            result.get("ourScore") is not None
+            and result.get("opponentScore") is not None
+        ):
+            current[str(event.get("id"))] = (
+                int(result["ourScore"]),
+                int(result["opponentScore"]),
+            )
+    return current
+
+
+def send_discord(webhook_url: str, changed: list[dict], source_name: str) -> None:
+    if not webhook_url or not changed:
+        return
+
+    lines = [f"🥌 **CB Butchers – nový výsledek ({source_name})**"]
+
+    for item in changed:
+        lines.append(
+            f"**CB Butchers {item['ourScore']} : "
+            f"{item['opponentScore']} {item['opponent']}**"
+        )
+        if item.get("date"):
+            lines.append(f"📅 {item['date']}")
+
+    message = "\n".join(lines)
+    if len(message) > 1900:
+        message = message[:1890] + "\n…"
+
+    try:
+        response = requests.post(
+            webhook_url,
+            json={
+                "content": message,
+                "allowed_mentions": {"parse": []},
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        print(f"Discord: odesláno upozornění pro {len(changed)} výsledek/ky.")
+    except Exception as exc:
+        # Výsledek už je bezpečně uložený v D1; chyba Discordu nesmí zrušit import.
+        print(f"VAROVÁNÍ: Discord upozornění se nepodařilo odeslat: {exc}")
+
+
 def main() -> None:
     cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     sheet_cfg = cfg.get("googleSheet") or {}
@@ -293,9 +354,40 @@ def main() -> None:
 
     api_base = compact(os.getenv("API_BASE")).rstrip("/")
     import_token = compact(os.getenv("IMPORT_TOKEN"))
+    discord_webhook_url = compact(os.getenv("DISCORD_WEBHOOK_URL"))
 
     if not api_base or not import_token:
         raise RuntimeError("Chybí API_BASE nebo IMPORT_TOKEN.")
+
+    current_results = load_current_results(api_base)
+    changed = []
+    result_by_event = {
+        item["eventId"]: item
+        for item in payload
+    }
+
+    for event_id, item in result_by_event.items():
+        incoming = (item["ourScore"], item["opponentScore"])
+        if current_results.get(event_id) != incoming:
+            changed.append({
+                **item,
+                "opponent": next(
+                    (
+                        event.get("opponent")
+                        for event in events
+                        if event.get("id") == event_id
+                    ),
+                    "Soupeř",
+                ),
+                "date": next(
+                    (
+                        event.get("date")
+                        for event in events
+                        if event.get("id") == event_id
+                    ),
+                    None,
+                ),
+            })
 
     response = requests.post(
         f"{api_base}/api/import-results",
@@ -314,6 +406,15 @@ def main() -> None:
         )
 
     print("Google výsledky D1:", response.text)
+
+    if changed:
+        send_discord(
+            discord_webhook_url,
+            changed,
+            "Brněnský pohár",
+        )
+    else:
+        print("Discord: žádný nový ani změněný výsledek.")
 
 
 if __name__ == "__main__":

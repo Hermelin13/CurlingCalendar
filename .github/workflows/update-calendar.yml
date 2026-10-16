@@ -76,12 +76,14 @@ jobs:
         env:
           API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python scripts/import_google_results.py
 
       - name: Import official results and LSD
         env:
           API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python scripts/import_official_results.py
 
       - name: Commit events.json
