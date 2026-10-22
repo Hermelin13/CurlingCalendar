@@ -275,11 +275,12 @@ async function api(path, options = {}) {
 async function loadEvents() {
   try {
     const body = await api('/api/events', { method: 'GET' });
-    return body.events || [];
+    return (body.events || []).filter(event => !event?.cancelled);
   } catch (err) {
     console.warn('Cloudflare API není dostupné, zobrazuji statickou kopii events.json.', err);
     showToast('API není dostupné – zobrazuji jen statická data.');
-    return loadJson('data/events.json');
+    const fallback = await loadJson('data/events.json');
+    return (fallback || []).filter(event => !event?.cancelled);
   }
 }
 
@@ -353,7 +354,7 @@ function eventDateTime(e) {
 }
 
 function visibleEvents() {
-  return state.events.filter(e => state.filters.has(filterType(e)));
+  return state.events.filter(e => !e?.cancelled && state.filters.has(filterType(e)));
 }
 
 function renderCalendar() {
@@ -675,8 +676,104 @@ function renderUserSelect() {
   select.innerHTML = '<option value="">Vyber své jméno</option>' + state.users.map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)}</option>`).join('');
 }
 
+function attendanceStatusLabel(status) {
+  return ({
+    yes: 'Ano',
+    maybe: 'Možná',
+    no: 'Ne',
+    unknown: '—'
+  })[status || 'unknown'] || '—';
+}
+
+function renderAttendanceOverview() {
+  const host = $('#attendance-overview');
+  if (!host) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const events = state.events
+    .filter(event =>
+      !event?.cancelled &&
+      event?.attendanceEnabled &&
+      eventDateTime(event) >= today
+    )
+    .sort((a, b) => eventDateTime(a) - eventDateTime(b));
+
+  const users = [...state.users].sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'cs')
+  );
+
+  if (!events.length || !users.length) {
+    host.innerHTML = '<p class="empty">Není co zobrazit.</p>';
+    return;
+  }
+
+  const head = users
+    .map(user => `<th scope="col">${escapeHtml(user.name)}</th>`)
+    .join('');
+
+  const rows = events.map(event => {
+    const attendance = new Map(
+      (state.attendanceSummary[event.id] || []).map(row => [
+        String(row.userId || row.id || ''),
+        row.status || 'unknown'
+      ])
+    );
+
+    // Souhrn API vrací jméno i user_id. Starší odpověď může mít jen id.
+    const byName = new Map(
+      (state.attendanceSummary[event.id] || []).map(row => [
+        String(row.name || '').trim().toLocaleLowerCase('cs'),
+        row.status || 'unknown'
+      ])
+    );
+
+    const cells = users.map(user => {
+      const status =
+        attendance.get(String(user.id)) ||
+        byName.get(String(user.name || '').trim().toLocaleLowerCase('cs')) ||
+        'unknown';
+      return `<td><span class="attendance-table-status status-${status}" title="${escapeHtml(attendanceStatusLabel(status))}">${escapeHtml(attendanceStatusLabel(status))}</span></td>`;
+    }).join('');
+
+    const when = `${formatDateCZ(event.date, false)}${event.allDay ? '' : ` ${escapeHtml([event.startTime, event.endTime].filter(Boolean).join('–'))}`}`;
+
+    return `<tr>
+      <th scope="row">
+        <strong>${escapeHtml(event.title || 'Událost')}</strong>
+        <small>${when}</small>
+      </th>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="attendance-table-scroll">
+      <table class="attendance-overview-table">
+        <thead>
+          <tr>
+            <th scope="col">Událost</th>
+            ${head}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openAttendanceOverview() {
+  renderAttendanceOverview();
+  $('#attendance-table-dialog').showModal();
+}
+
+function closeTopMenus() {
+  $$('.menu-dropdown[open]').forEach(menu => menu.removeAttribute('open'));
+}
+
 function updateLoginUI() {
-  $('#login-state').textContent = state.user ? state.user.name : 'Nepřihlášen';
+  $('#login-state').textContent = state.user ? state.user.name : 'Přihlásit';
   $('#login-btn').classList.toggle('hidden', !!state.user); $('#logout-btn').classList.toggle('hidden', !state.user);
   $('#change-pin-btn').classList.toggle('hidden', !state.user);
   $('#add-training-btn').classList.toggle('hidden', !state.user?.canManageTrainings);
@@ -703,10 +800,12 @@ function wireUI() {
 
     renderAll();
   }));
-  $('#login-btn').onclick=()=>$('#login-dialog').showModal(); $('#logout-btn').onclick=()=>logout();
-  $('#export-btn').onclick=exportCalendar;
-  $('#change-pin-btn').onclick=()=>{ $('#change-pin-form').reset(); $('#change-pin-error').textContent=''; $('#change-pin-dialog').showModal(); };
-  $('#add-training-btn').onclick=()=>{ $('#training-date').value=isoDate(new Date()); $('#training-dialog').showModal(); };
+  $('#login-btn').onclick=()=>{ closeTopMenus(); $('#login-dialog').showModal(); };
+  $('#logout-btn').onclick=()=>{ closeTopMenus(); logout(); };
+  $('#export-btn').onclick=()=>{ closeTopMenus(); exportCalendar(); };
+  $('#change-pin-btn').onclick=()=>{ closeTopMenus(); $('#change-pin-form').reset(); $('#change-pin-error').textContent=''; $('#change-pin-dialog').showModal(); };
+  $('#add-training-btn').onclick=()=>{ closeTopMenus(); $('#training-date').value=isoDate(new Date()); $('#training-dialog').showModal(); };
+  $('#attendance-table-btn').onclick=()=>{ closeTopMenus(); openAttendanceOverview(); };
   $$('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
   $('#login-form').addEventListener('submit', async e=>{
     e.preventDefault(); $('#login-error').textContent='';
@@ -731,7 +830,7 @@ async function boot() {
   document.title=state.config.siteTitle || document.title; $('#site-title').textContent=state.config.siteTitle || 'Kalendář týmu';
   wireUI();
   await Promise.all([loadUsers(), restoreLogin()]);
-  state.events = await loadEvents();
+  state.events = (await loadEvents()).filter(event => !event?.cancelled);
   await loadAttendanceSummary();
   const firstFuture=state.events.filter(e=>eventDateTime(e)>=new Date()).sort((a,b)=>eventDateTime(a)-eventDateTime(b))[0];
   if (firstFuture) { const d=eventDateTime(firstFuture); state.month=new Date(d.getFullYear(),d.getMonth(),1); }

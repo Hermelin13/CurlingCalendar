@@ -395,40 +395,236 @@ body.quick-rsvp-active {
 }
 
 
-/* Zrušené události */
-.event-chip.cancelled,
-.upcoming-item.cancelled {
-  border-color: #dc6b64;
-  background: #fff1f0;
-  opacity: .82;
+/* Zjednodušené horní menu */
+.top-actions {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.event-chip.cancelled strong,
-.upcoming-item.cancelled h3 {
-  text-decoration: line-through;
+.menu-dropdown {
+  position: relative;
 }
-.cancelled-badge {
-  display: inline-block;
+.menu-dropdown > summary {
+  list-style: none;
+}
+.menu-dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+.menu-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 10px;
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: .84rem;
+  line-height: 1;
   text-decoration: none;
-  color: #b42318;
-  background: #fee4e2;
-  border: 1px solid #fecdca;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-dropdown > summary.menu-button::after {
+  content: "▾";
+  font-size: .68rem;
+  opacity: .8;
+}
+.menu-dropdown[open] > summary.menu-button,
+.menu-button:hover,
+.menu-button:focus-visible {
+  background: rgba(255,255,255,.23);
+}
+.menu-link {
+  text-decoration: none;
+}
+.user-menu-button {
+  border-color: transparent;
+  background: transparent;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.menu-popover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 205px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgba(15,23,42,.24);
+}
+.menu-popover-right {
+  left: auto;
+  right: 0;
+}
+.menu-item {
+  appearance: none;
+  width: 100%;
+  display: block;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: #eef3f9;
+  color: var(--primary);
+}
+
+/* Tabulka účasti */
+.attendance-overview-modal {
+  width: min(1120px, calc(100vw - 24px));
+}
+.attendance-overview {
+  margin-top: 16px;
+}
+.attendance-table-scroll {
+  max-height: min(68vh, 760px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.attendance-overview-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 760px;
+  font-size: .8rem;
+}
+.attendance-overview-table th,
+.attendance-overview-table td {
+  padding: 8px 9px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  background: var(--panel);
+}
+.attendance-overview-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #eef3f9;
+  color: var(--primary);
+  font-weight: 850;
+}
+.attendance-overview-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 190px;
+  text-align: left;
+}
+.attendance-overview-table thead th:first-child {
+  z-index: 4;
+}
+.attendance-overview-table tbody th:first-child {
+  background: var(--panel);
+}
+.attendance-overview-table tr:last-child > * {
+  border-bottom: 0;
+}
+.attendance-overview-table tr > *:last-child {
+  border-right: 0;
+}
+.attendance-overview-table th strong,
+.attendance-overview-table th small {
+  display: block;
+}
+.attendance-overview-table th small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.attendance-table-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 5px 7px;
   border-radius: 999px;
-  padding: 1px 6px;
-  font-size: .64rem;
-  font-weight: 900;
-  letter-spacing: .03em;
-  vertical-align: middle;
+  font-size: .72rem;
+  font-weight: 850;
+  border: 1px solid var(--line);
+}
+.attendance-table-status.status-yes {
+  color: var(--yes);
+  background: #edf8f0;
+  border-color: #b9dfc5;
+}
+.attendance-table-status.status-maybe {
+  color: var(--maybe);
+  background: #fff7e6;
+  border-color: #eed49b;
+}
+.attendance-table-status.status-no {
+  color: var(--no);
+  background: #fff0ef;
+  border-color: #f1c7c3;
+}
+.attendance-table-status.status-unknown {
+  color: var(--muted);
+  background: #f5f7fa;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    gap: 14px;
+  }
+  .top-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 7px;
+  }
+  .menu-button {
+    min-height: 40px;
+  }
+  .menu-popover,
+  .menu-popover-right {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 28px);
+  }
+  .top-actions .menu-dropdown:last-child .menu-popover {
+    left: auto;
+    right: 0;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
-  .event-chip.cancelled,
-  .upcoming-item.cancelled {
-    background: #351918;
-    border-color: #7a3a36;
+  .menu-popover {
+    background: #171d27;
   }
-  .cancelled-badge {
-    color: #ffb4ab;
-    background: #4a201e;
-    border-color: #7a3a36;
+  .menu-item:hover,
+  .menu-item:focus-visible {
+    background: #222b39;
+    color: #dbe8ff;
   }
+  .attendance-overview-table thead th {
+    background: #222b39;
+    color: #dbe8ff;
+  }
+  .attendance-table-status.status-yes { background: #173322; border-color: #295b3a; }
+  .attendance-table-status.status-maybe { background: #3a2a0e; border-color: #6b4a15; }
+  .attendance-table-status.status-no { background: #3a1d1c; border-color: #6b3431; }
+  .attendance-table-status.status-unknown { background: #202732; }
 }

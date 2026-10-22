@@ -13,16 +13,41 @@
       <p class="eyebrow">Curling • CB BUTchers</p>
       <h1 id="site-title">Kalendář týmu</h1>
     </div>
-    <div class="top-actions">
-      <span id="login-state" class="login-state">Nepřihlášen</span>
-      <button id="login-btn" class="button secondary">Přihlásit</button>
-      <button id="export-btn" class="button secondary">Export .ics</button>
-      <a class="button secondary button-link" href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Tréninkový kalendář</a>
-      <a class="button secondary button-link" href="stats.html">Statistiky</a>
-      <button id="change-pin-btn" class="button secondary hidden">Změnit PIN</button>
-      <button id="logout-btn" class="button secondary hidden">Odhlásit</button>
-      <button id="add-training-btn" class="button primary hidden">+ Přidat trénink</button>
-    </div>
+    <nav class="top-actions" aria-label="Hlavní nabídka">
+      <details class="menu-dropdown user-menu">
+        <summary class="menu-button user-menu-button">
+          <span id="login-state">Nepřihlášen</span>
+        </summary>
+        <div class="menu-popover menu-popover-right">
+          <button id="login-btn" type="button" class="menu-item">Přihlásit</button>
+          <button id="logout-btn" type="button" class="menu-item hidden">Odhlásit</button>
+        </div>
+      </details>
+
+      <details class="menu-dropdown">
+        <summary class="menu-button">Odkazy</summary>
+        <div class="menu-popover">
+          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a class="menu-item" href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
+          <a class="menu-item" href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
+          <a class="menu-item" href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
+          <a class="menu-item" href="https://www.curling.cz/souteze-csc/mcr-muzu-a-zen/" target="_blank" rel="noopener noreferrer">Termíny divize</a>
+          <a class="menu-item" href="https://is.curling.cz/" target="_blank" rel="noopener noreferrer">Soupiska</a>
+        </div>
+      </details>
+
+      <a class="menu-button menu-link" href="stats.html">Statistiky</a>
+
+      <details class="menu-dropdown">
+        <summary class="menu-button">Funkce</summary>
+        <div class="menu-popover menu-popover-right">
+          <button id="add-training-btn" type="button" class="menu-item hidden">Přidat trénink</button>
+          <button id="export-btn" type="button" class="menu-item">Export dat</button>
+          <button id="change-pin-btn" type="button" class="menu-item hidden">Změna PINu</button>
+          <button id="attendance-table-btn" type="button" class="menu-item">Tabulka účasti</button>
+        </div>
+      </details>
+    </nav>
   </header>
 
   <main class="layout">
@@ -37,7 +62,7 @@
         <div class="filters" aria-label="Filtry kalendáře">
           <label><input type="checkbox" value="excel" checked /> Pohár</label>
           <label><input type="checkbox" value="pdf" checked /> MČR</label>
-          <label><input type="checkbox" value="ical" checked /> EOS</label>
+          <label><input type="checkbox" value="ical" checked /> iCal</label>
           <label><input type="checkbox" value="manual" checked /> Tréninky</label>
         </div>
       </div>
@@ -54,7 +79,7 @@
         <div class="filters mobile-filters">
           <label><input type="checkbox" value="excel" checked /> Pohár</label>
           <label><input type="checkbox" value="pdf" checked /> MČR</label>
-          <label><input type="checkbox" value="ical" checked /> EOS</label>
+          <label><input type="checkbox" value="ical" checked /> iCal</label>
           <label><input type="checkbox" value="manual" checked /> Tréninky</label>
         </div>
       </div>
@@ -72,7 +97,7 @@
         <h3>Legenda</h3>
         <div><span class="dot source-excel"></span> Brněnský pohár</div>
         <div><span class="dot source-pdf"></span> MČR / divize</div>
-        <div><span class="dot source-ical"></span> EOS</div>
+        <div><span class="dot source-ical"></span> iCal</div>
         <div><span class="dot source-manual"></span> Ruční trénink</div>
         <div><span class="dot source-training_sheet"></span> Automatický trénink</div>
         <div><span class="dot training-eliska"></span> Eliška může</div>
@@ -179,6 +204,16 @@
       </div>
       <p id="training-error" class="error"></p>
       <div class="modal-actions"><button class="button primary" type="submit">Uložit trénink</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="attendance-table-dialog" class="modal attendance-overview-modal">
+    <form method="dialog" class="modal-card">
+      <button class="modal-close" value="cancel" aria-label="Zavřít">×</button>
+      <p class="eyebrow">Tým</p>
+      <h2>Tabulka účasti</h2>
+      <p class="helper">Budoucí nezrušené události, u kterých se sleduje účast.</p>
+      <div id="attendance-overview" class="attendance-overview"></div>
     </form>
   </dialog>
 
