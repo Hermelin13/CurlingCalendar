@@ -628,3 +628,49 @@ body.quick-rsvp-active {
   .attendance-table-status.status-no { background: #3a1d1c; border-color: #6b3431; }
   .attendance-table-status.status-unknown { background: #202732; }
 }
+
+
+/* Oprava mobilního přihlášení */
+.user-login-button {
+  border-color: transparent;
+  background: transparent;
+}
+.user-login-button::after {
+  content: none !important;
+}
+
+@media (max-width: 760px) {
+  .top-actions {
+    align-items: flex-start;
+  }
+
+  .user-login-button,
+  .user-menu-button {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .menu-popover {
+    min-width: 190px;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 24px));
+  }
+
+  .user-menu .menu-popover {
+    left: 0;
+    right: auto;
+  }
+}
+
+
+/* Horní dropdowny: na desktopu se nesmí překrývat */
+@media (min-width: 761px) {
+  .top-actions .menu-dropdown:last-child .menu-popover {
+    left: auto;
+    right: 0;
+  }
+  .top-actions .menu-dropdown:nth-of-type(2) .menu-popover {
+    left: 0;
+    right: auto;
+  }
+}

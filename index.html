@@ -14,20 +14,21 @@
       <h1 id="site-title">Kalendář týmu</h1>
     </div>
     <nav class="top-actions" aria-label="Hlavní nabídka">
-      <details class="menu-dropdown user-menu">
+      <button id="login-btn" type="button" class="menu-button user-login-button">Přihlásit</button>
+
+      <details id="user-menu" class="menu-dropdown user-menu hidden" name="top-menu">
         <summary class="menu-button user-menu-button">
-          <span id="login-state">Nepřihlášen</span>
+          <span id="login-state">Uživatel</span>
         </summary>
-        <div class="menu-popover menu-popover-right">
-          <button id="login-btn" type="button" class="menu-item">Přihlásit</button>
-          <button id="logout-btn" type="button" class="menu-item hidden">Odhlásit</button>
+        <div class="menu-popover">
+          <button id="logout-btn" type="button" class="menu-item">Odhlásit</button>
         </div>
       </details>
 
-      <details class="menu-dropdown">
+      <details class="menu-dropdown" name="top-menu">
         <summary class="menu-button">Odkazy</summary>
         <div class="menu-popover">
-          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
           <a class="menu-item" href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
@@ -38,7 +39,7 @@
 
       <a class="menu-button menu-link" href="stats.html">Statistiky</a>
 
-      <details class="menu-dropdown">
+      <details class="menu-dropdown" name="top-menu">
         <summary class="menu-button">Funkce</summary>
         <div class="menu-popover menu-popover-right">
           <button id="add-training-btn" type="button" class="menu-item hidden">Přidat trénink</button>

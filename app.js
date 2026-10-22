@@ -773,9 +773,17 @@ function closeTopMenus() {
 }
 
 function updateLoginUI() {
-  $('#login-state').textContent = state.user ? state.user.name : 'Přihlásit';
-  $('#login-btn').classList.toggle('hidden', !!state.user); $('#logout-btn').classList.toggle('hidden', !state.user);
-  $('#change-pin-btn').classList.toggle('hidden', !state.user);
+  const loggedIn = Boolean(state.user);
+  $('#login-btn').classList.toggle('hidden', loggedIn);
+  $('#user-menu').classList.toggle('hidden', !loggedIn);
+
+  if (loggedIn) {
+    $('#login-state').textContent = state.user.name;
+  } else {
+    $('#user-menu').removeAttribute('open');
+  }
+
+  $('#change-pin-btn').classList.toggle('hidden', !loggedIn);
   $('#add-training-btn').classList.toggle('hidden', !state.user?.canManageTrainings);
 }
 
@@ -800,8 +808,34 @@ function wireUI() {
 
     renderAll();
   }));
-  $('#login-btn').onclick=()=>{ closeTopMenus(); $('#login-dialog').showModal(); };
+  $('#login-btn').onclick=()=>$('#login-dialog').showModal();
   $('#logout-btn').onclick=()=>{ closeTopMenus(); logout(); };
+
+  $$('.menu-dropdown > summary').forEach(summary => {
+    summary.addEventListener('click', () => {
+      const current = summary.parentElement;
+      $$('.menu-dropdown[open]').forEach(other => {
+        if (other !== current) other.removeAttribute('open');
+      });
+    });
+  });
+
+  $$('.menu-dropdown').forEach(menu => {
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      $$('.menu-dropdown[open]').forEach(other => {
+        if (other !== menu) other.removeAttribute('open');
+      });
+    });
+  });
+
+  $$('.menu-link').forEach(link => {
+    link.addEventListener('click', closeTopMenus);
+  });
+
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.menu-dropdown')) closeTopMenus();
+  });
   $('#export-btn').onclick=()=>{ closeTopMenus(); exportCalendar(); };
   $('#change-pin-btn').onclick=()=>{ closeTopMenus(); $('#change-pin-form').reset(); $('#change-pin-error').textContent=''; $('#change-pin-dialog').showModal(); };
   $('#add-training-btn').onclick=()=>{ closeTopMenus(); $('#training-date').value=isoDate(new Date()); $('#training-dialog').showModal(); };
