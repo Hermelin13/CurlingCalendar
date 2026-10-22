@@ -419,8 +419,9 @@ async function openEvent(e) {
     ['Místo', e.location || '—'], ['Dráha', e.rink || '—'], ['Soupeř', e.opponent || '—'],
   ];
   $('#event-meta').innerHTML = meta.map(([k,v])=>`<div class="meta-row"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`).join('');
-  $('#event-description').textContent = e.description || '';
-  $('#event-description').classList.toggle('hidden', !e.description);
+  const eventDescription = $('#event-description');
+  eventDescription.textContent = e.description || '';
+  eventDescription.classList.toggle('hidden', !e.description);
 
   renderResultSection(e);
 
@@ -474,13 +475,19 @@ function renderResultSection(event) {
 
 async function saveResult(event) {
   if (!state.user) return showToast('Nejdřív se přihlas.');
-  const ourScore = Number($('#result-our-score').value);
-  const opponentScore = Number($('#result-opponent-score').value);
-  const note = $('#result-note').value.trim();
+
+  const ourScoreInput = $('#result-our-score');
+  const opponentScoreInput = $('#result-opponent-score');
+  const resultNote = $('#result-note');
+  const resultError = $('#result-error');
+
+  const ourScore = Number(ourScoreInput.value);
+  const opponentScore = Number(opponentScoreInput.value);
+  const note = resultNote.value.trim();
 
   if (!Number.isInteger(ourScore) || !Number.isInteger(opponentScore) ||
       ourScore < 0 || ourScore > 99 || opponentScore < 0 || opponentScore > 99) {
-    $('#result-error').textContent = 'Zadej skóre 0–99 pro oba týmy.';
+    resultError.textContent = 'Zadej skóre 0–99 pro oba týmy.';
     return;
   }
 
@@ -494,7 +501,7 @@ async function saveResult(event) {
     renderAll();
     showToast('Výsledek uložen.');
   } catch (err) {
-    $('#result-error').textContent = err.message;
+    resultError.textContent = err.message;
   }
 }
 
@@ -556,16 +563,44 @@ async function saveAttendance(eventId, status, userId = state.user?.id) {
 async function addTraining(formEvent) {
   formEvent.preventDefault();
   if (!state.user?.canManageTrainings) return;
+
+  const trainingError = $('#training-error');
+  const trainingLocation = $('#training-location');
+  const trainingDate = $('#training-date');
+  const trainingStart = $('#training-start');
+  const trainingEnd = $('#training-end');
+  const trainingRink = $('#training-rink');
+  const trainingDescription = $('#training-description');
+  const trainingDialog = $('#training-dialog');
+  const trainingForm = $('#training-form');
+
   try {
-    $('#training-error').textContent='';
-    const body = await api('/api/trainings', { method:'POST', body:JSON.stringify({
-      date:$('#training-date').value, startTime:$('#training-start').value,
-      endTime:$('#training-end').value || null, location:$('#training-location').value.trim() || null,
-      rink:$('#training-rink').value.trim() || null, description:$('#training-description').value.trim() || null,
-    })});
-    state.events.push(body.event); state.events.sort((a,b)=>eventDateTime(a)-eventDateTime(b)); await loadAttendanceSummary(); renderAll();
-    $('#training-dialog').close(); $('#training-form').reset(); $('#training-location').value='Curling Brno'; showToast('Trénink přidán.');
-  } catch (err) { $('#training-error').textContent=err.message; }
+    trainingError.textContent = '';
+
+    const body = await api('/api/trainings', {
+      method: 'POST',
+      body: JSON.stringify({
+        date: trainingDate.value,
+        startTime: trainingStart.value,
+        endTime: trainingEnd.value || null,
+        location: trainingLocation.value.trim() || null,
+        rink: trainingRink.value.trim() || null,
+        description: trainingDescription.value.trim() || null,
+      })
+    });
+
+    state.events.push(body.event);
+    state.events.sort((a, b) => eventDateTime(a) - eventDateTime(b));
+    await loadAttendanceSummary();
+    renderAll();
+
+    trainingDialog.close();
+    trainingForm.reset();
+    trainingLocation.value = 'Curling Brno';
+    showToast('Trénink přidán.');
+  } catch (err) {
+    trainingError.textContent = err.message;
+  }
 }
 
 async function cancelEvent(event) {
@@ -774,17 +809,25 @@ function closeTopMenus() {
 
 function updateLoginUI() {
   const loggedIn = Boolean(state.user);
+  const userMenu = $('#user-menu');
   $('#login-btn').classList.toggle('hidden', loggedIn);
-  $('#user-menu').classList.toggle('hidden', !loggedIn);
+  userMenu.classList.toggle('hidden', !loggedIn);
 
   if (loggedIn) {
     $('#login-state').textContent = state.user.name;
   } else {
-    $('#user-menu').removeAttribute('open');
+    userMenu.removeAttribute('open');
   }
 
   $('#change-pin-btn').classList.toggle('hidden', !loggedIn);
   $('#add-training-btn').classList.toggle('hidden', !state.user?.canManageTrainings);
+
+  const mobileState = $('#mobile-user-state');
+  if (mobileState) mobileState.textContent = loggedIn ? state.user.name : 'Přihlásit';
+  $('#mobile-login-btn')?.classList.toggle('hidden', loggedIn);
+  $('#mobile-logout-btn')?.classList.toggle('hidden', !loggedIn);
+  $('#mobile-change-pin-btn')?.classList.toggle('hidden', !loggedIn);
+  $('#mobile-add-training-btn')?.classList.toggle('hidden', !state.user?.canManageTrainings);
 }
 
 function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář'})[type] || type; }
@@ -793,70 +836,252 @@ function showToast(text) { const t=$('#toast'); t.textContent=text; t.classList.
 function renderAll() { renderCalendar(); renderUpcoming(); }
 
 function wireUI() {
-  $('#prev-month').onclick=()=>{ state.month=new Date(state.month.getFullYear(),state.month.getMonth()-1,1); renderCalendar(); };
-  $('#next-month').onclick=()=>{ state.month=new Date(state.month.getFullYear(),state.month.getMonth()+1,1); renderCalendar(); };
-  $('#today-btn').onclick=()=>{ const n=new Date(); state.month=new Date(n.getFullYear(),n.getMonth(),1); renderCalendar(); };
-  $$('.filters input').forEach(i => i.addEventListener('change', () => {
-    if (i.checked) state.filters.add(i.value);
-    else state.filters.delete(i.value);
+  const prevMonthBtn = $('#prev-month');
+  const nextMonthBtn = $('#next-month');
+  const todayBtn = $('#today-btn');
+  const filterInputs = $$('.filters input');
 
-    // Na mobilu je druhá sada filtrů nad „Nejbližšími událostmi“.
-    // Udržujeme obě sady vždy synchronizované.
-    $$('.filters input').forEach(other => {
-      if (other.value === i.value) other.checked = i.checked;
+  const loginBtn = $('#login-btn');
+  const logoutBtn = $('#logout-btn');
+  const loginDialog = $('#login-dialog');
+  const loginForm = $('#login-form');
+  const loginError = $('#login-error');
+  const userSelect = $('#user-select');
+  const pinInput = $('#pin-input');
+
+  const exportBtn = $('#export-btn');
+  const changePinBtn = $('#change-pin-btn');
+  const changePinForm = $('#change-pin-form');
+  const changePinError = $('#change-pin-error');
+  const changePinDialog = $('#change-pin-dialog');
+  const currentPinInput = $('#current-pin-input');
+  const newPinInput = $('#new-pin-input');
+  const newPinConfirmInput = $('#new-pin-confirm-input');
+
+  const addTrainingBtn = $('#add-training-btn');
+  const trainingDate = $('#training-date');
+  const trainingDialog = $('#training-dialog');
+  const trainingForm = $('#training-form');
+  const attendanceTableBtn = $('#attendance-table-btn');
+
+  const mobileMenuDialog = $('#mobile-menu-dialog');
+  const mobileMenuBtn = $('#mobile-menu-btn');
+  const mobileMenuClose = $('#mobile-menu-close');
+  const mobileLoginBtn = $('#mobile-login-btn');
+  const mobileLogoutBtn = $('#mobile-logout-btn');
+  const mobileAddTrainingBtn = $('#mobile-add-training-btn');
+  const mobileExportBtn = $('#mobile-export-btn');
+  const mobileChangePinBtn = $('#mobile-change-pin-btn');
+  const mobileAttendanceTableBtn = $('#mobile-attendance-table-btn');
+
+  const resultSaveBtn = $('#result-save-btn');
+  const resultDeleteBtn = $('#result-delete-btn');
+
+  const menuDropdowns = $$('.menu-dropdown');
+  const menuSummaries = $$('.menu-dropdown > summary');
+  const menuLinks = $$('.menu-link');
+  const mobileMenuLinks = $$('#mobile-menu-dialog a');
+  const closeButtons = $$('[data-close]');
+
+  prevMonthBtn.onclick = () => {
+    state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1);
+    renderCalendar();
+  };
+
+  nextMonthBtn.onclick = () => {
+    state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1);
+    renderCalendar();
+  };
+
+  todayBtn.onclick = () => {
+    const now = new Date();
+    state.month = new Date(now.getFullYear(), now.getMonth(), 1);
+    renderCalendar();
+  };
+
+  filterInputs.forEach(input => {
+    input.addEventListener('change', () => {
+      if (input.checked) state.filters.add(input.value);
+      else state.filters.delete(input.value);
+
+      filterInputs.forEach(other => {
+        if (other.value === input.value) other.checked = input.checked;
+      });
+
+      renderAll();
     });
+  });
 
-    renderAll();
-  }));
-  $('#login-btn').onclick=()=>$('#login-dialog').showModal();
-  $('#logout-btn').onclick=()=>{ closeTopMenus(); logout(); };
+  loginBtn.onclick = () => loginDialog.showModal();
+  logoutBtn.onclick = () => {
+    closeTopMenus();
+    logout();
+  };
 
-  $$('.menu-dropdown > summary').forEach(summary => {
+  menuSummaries.forEach(summary => {
     summary.addEventListener('click', () => {
       const current = summary.parentElement;
-      $$('.menu-dropdown[open]').forEach(other => {
-        if (other !== current) other.removeAttribute('open');
+      menuDropdowns.forEach(other => {
+        if (other !== current && other.open) other.removeAttribute('open');
       });
     });
   });
 
-  $$('.menu-dropdown').forEach(menu => {
+  menuDropdowns.forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (!menu.open) return;
-      $$('.menu-dropdown[open]').forEach(other => {
-        if (other !== menu) other.removeAttribute('open');
+      menuDropdowns.forEach(other => {
+        if (other !== menu && other.open) other.removeAttribute('open');
       });
     });
   });
 
-  $$('.menu-link').forEach(link => {
+  menuLinks.forEach(link => {
     link.addEventListener('click', closeTopMenus);
   });
 
   document.addEventListener('click', event => {
     if (!event.target.closest('.menu-dropdown')) closeTopMenus();
   });
-  $('#export-btn').onclick=()=>{ closeTopMenus(); exportCalendar(); };
-  $('#change-pin-btn').onclick=()=>{ closeTopMenus(); $('#change-pin-form').reset(); $('#change-pin-error').textContent=''; $('#change-pin-dialog').showModal(); };
-  $('#add-training-btn').onclick=()=>{ closeTopMenus(); $('#training-date').value=isoDate(new Date()); $('#training-dialog').showModal(); };
-  $('#attendance-table-btn').onclick=()=>{ closeTopMenus(); openAttendanceOverview(); };
-  $$('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
-  $('#login-form').addEventListener('submit', async e=>{
-    e.preventDefault(); $('#login-error').textContent='';
-    try { await login($('#user-select').value, $('#pin-input').value); $('#pin-input').value=''; $('#login-dialog').close(); showToast('Přihlášeno.'); }
-    catch(err) { $('#login-error').textContent=err.message; }
+
+  exportBtn.onclick = () => {
+    closeTopMenus();
+    exportCalendar();
+  };
+
+  const openChangePinDialog = () => {
+    changePinForm.reset();
+    changePinError.textContent = '';
+    changePinDialog.showModal();
+  };
+
+  changePinBtn.onclick = () => {
+    closeTopMenus();
+    openChangePinDialog();
+  };
+
+  const openTrainingDialog = () => {
+    trainingDate.value = isoDate(new Date());
+    trainingDialog.showModal();
+  };
+
+  addTrainingBtn.onclick = () => {
+    closeTopMenus();
+    openTrainingDialog();
+  };
+
+  attendanceTableBtn.onclick = () => {
+    closeTopMenus();
+    openAttendanceOverview();
+  };
+
+  const openMobileMenu = () => {
+    mobileMenuDialog.classList.add('is-open');
+    mobileMenuDialog.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('mobile-menu-open');
+  };
+
+  const closeMobileMenu = () => {
+    mobileMenuDialog.classList.remove('is-open');
+    mobileMenuDialog.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('mobile-menu-open');
+  };
+
+  mobileMenuBtn.onclick = openMobileMenu;
+  mobileMenuClose.onclick = closeMobileMenu;
+
+  mobileMenuDialog.addEventListener('click', event => {
+    if (event.target === mobileMenuDialog) closeMobileMenu();
   });
-  $('#change-pin-form').addEventListener('submit', async e=>{
-    e.preventDefault(); $('#change-pin-error').textContent='';
-    const currentPin=$('#current-pin-input').value, newPin=$('#new-pin-input').value, confirmPin=$('#new-pin-confirm-input').value;
-    if (newPin !== confirmPin) return $('#change-pin-error').textContent='Nové PINy se neshodují.';
-    if (!/^\d{4,12}$/.test(newPin)) return $('#change-pin-error').textContent='Nový PIN musí mít 4 až 12 číslic.';
-    try { await changePin(currentPin, newPin); $('#change-pin-dialog').close(); showToast('PIN byl změněn.'); }
-    catch(err) { $('#change-pin-error').textContent=err.message; }
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && mobileMenuDialog.classList.contains('is-open')) {
+      closeMobileMenu();
+    }
   });
-  $('#training-form').addEventListener('submit', addTraining);
-  $('#result-save-btn').addEventListener('click', () => state.selectedEvent && saveResult(state.selectedEvent));
-  $('#result-delete-btn').addEventListener('click', () => state.selectedEvent && deleteResult(state.selectedEvent));
+
+  mobileLoginBtn.onclick = () => {
+    closeMobileMenu();
+    loginDialog.showModal();
+  };
+
+  mobileLogoutBtn.onclick = () => {
+    closeMobileMenu();
+    logout();
+  };
+
+  mobileAddTrainingBtn.onclick = () => {
+    closeMobileMenu();
+    openTrainingDialog();
+  };
+
+  mobileExportBtn.onclick = () => {
+    closeMobileMenu();
+    exportCalendar();
+  };
+
+  mobileChangePinBtn.onclick = () => {
+    closeMobileMenu();
+    openChangePinDialog();
+  };
+
+  mobileAttendanceTableBtn.onclick = () => {
+    closeMobileMenu();
+    openAttendanceOverview();
+  };
+
+  mobileMenuLinks.forEach(link => {
+    link.addEventListener('click', closeMobileMenu);
+  });
+
+  closeButtons.forEach(button => {
+    button.onclick = () => document.getElementById(button.dataset.close).close();
+  });
+
+  loginForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    loginError.textContent = '';
+
+    try {
+      await login(userSelect.value, pinInput.value);
+      pinInput.value = '';
+      loginDialog.close();
+      showToast('Přihlášeno.');
+    } catch (error) {
+      loginError.textContent = error.message;
+    }
+  });
+
+  changePinForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    changePinError.textContent = '';
+
+    const currentPin = currentPinInput.value;
+    const newPin = newPinInput.value;
+    const confirmPin = newPinConfirmInput.value;
+
+    if (newPin !== confirmPin) {
+      changePinError.textContent = 'Nové PINy se neshodují.';
+      return;
+    }
+
+    if (!/^\d{4,12}$/.test(newPin)) {
+      changePinError.textContent = 'Nový PIN musí mít 4 až 12 číslic.';
+      return;
+    }
+
+    try {
+      await changePin(currentPin, newPin);
+      changePinDialog.close();
+      showToast('PIN byl změněn.');
+    } catch (error) {
+      changePinError.textContent = error.message;
+    }
+  });
+
+  trainingForm.addEventListener('submit', addTraining);
+  resultSaveBtn.addEventListener('click', () => state.selectedEvent && saveResult(state.selectedEvent));
+  resultDeleteBtn.addEventListener('click', () => state.selectedEvent && deleteResult(state.selectedEvent));
 }
 
 async function boot() {

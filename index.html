@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>CB BUTchers – kalendář</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20261022-1525" />
 </head>
 <body>
   <header class="topbar">
@@ -16,7 +16,7 @@
     <nav class="top-actions" aria-label="Hlavní nabídka">
       <button id="login-btn" type="button" class="menu-button user-login-button">Přihlásit</button>
 
-      <details id="user-menu" class="menu-dropdown user-menu hidden" name="top-menu">
+      <details id="user-menu" class="menu-dropdown user-menu hidden">
         <summary class="menu-button user-menu-button">
           <span id="login-state">Uživatel</span>
         </summary>
@@ -25,7 +25,7 @@
         </div>
       </details>
 
-      <details class="menu-dropdown" name="top-menu">
+      <details class="menu-dropdown">
         <summary class="menu-button">Odkazy</summary>
         <div class="menu-popover">
           <a class="menu-item" href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
@@ -39,7 +39,7 @@
 
       <a class="menu-button menu-link" href="stats.html">Statistiky</a>
 
-      <details class="menu-dropdown" name="top-menu">
+      <details class="menu-dropdown">
         <summary class="menu-button">Funkce</summary>
         <div class="menu-popover menu-popover-right">
           <button id="add-training-btn" type="button" class="menu-item hidden">Přidat trénink</button>
@@ -49,6 +49,12 @@
         </div>
       </details>
     </nav>
+
+    <button id="mobile-menu-btn" type="button" class="mobile-menu-btn" aria-label="Otevřít menu"
+      onclick="document.getElementById('mobile-menu-dialog').classList.add('is-open');document.getElementById('mobile-menu-dialog').setAttribute('aria-hidden','false');document.body.classList.add('mobile-menu-open');">
+      <span class="mobile-menu-icon">☰</span>
+      <span>Menu</span>
+    </button>
   </header>
 
   <main class="layout">
@@ -208,6 +214,51 @@
     </form>
   </dialog>
 
+  <div id="mobile-menu-dialog" class="mobile-menu-dialog" aria-hidden="true">
+    <div class="mobile-menu-sheet">
+      <div class="mobile-menu-head">
+        <div>
+          <p class="eyebrow">CB BUTchers</p>
+          <h2 id="mobile-user-state">Přihlásit</h2>
+        </div>
+        <button id="mobile-menu-close" type="button" class="mobile-menu-close" aria-label="Zavřít"
+          onclick="document.getElementById('mobile-menu-dialog').classList.remove('is-open');document.getElementById('mobile-menu-dialog').setAttribute('aria-hidden','true');document.body.classList.remove('mobile-menu-open');">×</button>
+      </div>
+
+      <div class="mobile-menu-user">
+        <button id="mobile-login-btn" type="button" class="mobile-menu-primary">Přihlásit</button>
+        <button id="mobile-logout-btn" type="button" class="mobile-menu-item danger-text hidden">Odhlásit</button>
+      </div>
+
+      <section class="mobile-menu-section">
+        <h3>Odkazy</h3>
+        <div class="mobile-menu-grid">
+          <a href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
+          <a href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
+          <a href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
+          <a href="https://www.curling.cz/souteze-csc/mcr-muzu-a-zen/" target="_blank" rel="noopener noreferrer">Termíny divize</a>
+          <a href="https://is.curling.cz/" target="_blank" rel="noopener noreferrer">Soupiska</a>
+        </div>
+      </section>
+
+      <section class="mobile-menu-section">
+        <h3>Přehled</h3>
+        <a class="mobile-menu-item mobile-menu-link" href="stats.html">Statistiky</a>
+      </section>
+
+      <section class="mobile-menu-section">
+        <h3>Funkce</h3>
+        <div class="mobile-menu-list">
+          <button id="mobile-add-training-btn" type="button" class="mobile-menu-item hidden">Přidat trénink</button>
+          <button id="mobile-export-btn" type="button" class="mobile-menu-item">Export dat</button>
+          <button id="mobile-change-pin-btn" type="button" class="mobile-menu-item hidden">Změna PINu</button>
+          <button id="mobile-attendance-table-btn" type="button" class="mobile-menu-item">Tabulka účasti</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
   <dialog id="attendance-table-dialog" class="modal attendance-overview-modal">
     <form method="dialog" class="modal-card">
       <button class="modal-close" value="cancel" aria-label="Zavřít">×</button>
@@ -219,6 +270,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=20261022-1600" defer></script>
 </body>
 </html>
