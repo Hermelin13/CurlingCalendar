@@ -28,6 +28,8 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const pad = (n) => String(n).padStart(2, '0');
 const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const sourceType = (e) => e?.source?.type || 'manual';
+const filterType = (e) => sourceType(e) === 'training_sheet' ? 'manual' : sourceType(e);
+const isEliskaTraining = (e) => sourceType(e) === 'training_sheet' && Boolean(e?.eliskaAvailable);
 
 
 const quickRsvp = {
@@ -342,7 +344,7 @@ function eventDateTime(e) {
 }
 
 function visibleEvents() {
-  return state.events.filter(e => state.filters.has(sourceType(e)));
+  return state.events.filter(e => state.filters.has(filterType(e)));
 }
 
 function renderCalendar() {
@@ -368,8 +370,8 @@ function renderCalendar() {
     day.innerHTML = `<div class="day-number">${d.getDate()}</div>`;
     events.filter(e => e.date === key).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||'')).forEach(e => {
       const btn = document.createElement('button');
-      btn.className = `event-chip source-${sourceType(e)}`;
-      const time = e.allDay ? 'celý den' : (e.startTime || '');
+      btn.className = `event-chip source-${sourceType(e)}${isEliskaTraining(e) ? ' training-eliska' : ''}`;
+      const time = e.allDay ? 'celý den' : ([e.startTime, e.endTime].filter(Boolean).join('–') || '');
       btn.innerHTML = `<strong>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled ? availabilityHtml(e.id) : ''}`;
       attachQuickAttendance(btn, e);
       btn.addEventListener('click', () => openEventFromTap(e));
@@ -387,8 +389,8 @@ function renderUpcoming() {
   events.slice(0, 10).forEach(e => {
     const d = new Date(`${e.date}T12:00:00`);
     const btn = document.createElement('button');
-    btn.className = 'upcoming-item';
-    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.startTime || 'celý den')}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
+    btn.className = `upcoming-item${isEliskaTraining(e) ? ' training-eliska' : ''}`;
+    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.allDay ? 'celý den' : ([e.startTime, e.endTime].filter(Boolean).join('–') || 'celý den'))}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
     attachQuickAttendance(btn, e);
     btn.addEventListener('click', ()=>openEventFromTap(e));
     box.appendChild(btn);
@@ -642,7 +644,7 @@ function updateLoginUI() {
   $('#add-training-btn').classList.toggle('hidden', !state.user?.canManageTrainings);
 }
 
-function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink'})[type] || type; }
+function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář'})[type] || type; }
 function escapeHtml(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
 function showToast(text) { const t=$('#toast'); t.textContent=text; t.classList.add('show'); clearTimeout(showToast.timer); showToast.timer=setTimeout(()=>t.classList.remove('show'),3000); }
 function renderAll() { renderCalendar(); renderUpcoming(); }

@@ -19,5 +19,19 @@
     "name": "Výsledky ČSC – MČR divize",
     "team": "CB BUTchers",
     "url": "https://vysledky.curling.cz/match/default/played?seasonId=6&leagueId=351"
+  },
+  "trainingAvailability": {
+    "name": "Tréninkový kalendář",
+    "spreadsheetId": "1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI",
+    "csvUrl": "https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/gviz/tq?tqx=out:csv",
+    "fallbackCsvUrl": "https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/export?format=csv",
+    "webUrl": "https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing",
+    "location": "Curling Brno",
+    "minimumPlayers": 3,
+    "seasonStartYear": 2026,
+    "seasonEndDate": "2027-06-30",
+    "userAliases": {
+      "Niko": "Nikolas"
+    }
   }
 }

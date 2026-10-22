@@ -73,6 +73,10 @@ export default {
         if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
         return importEvents(request, env, cors.headers);
       }
+      if (url.pathname === '/api/import-training-calendar' && request.method === 'POST') {
+        if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
+        return importTrainingCalendar(request, env, cors.headers);
+      }
       if (url.pathname === '/api/import-results' && request.method === 'POST') {
         if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
         return importOfficialResults(request, env, cors.headers);
@@ -499,6 +503,123 @@ async function importEvents(request, env, headers) {
     ok: true,
     imported: cleanEvents.length,
     removed: staleIds.length
+  }, 200, headers);
+}
+
+async function importTrainingCalendar(request, env, headers) {
+  const body = await readJson(request);
+  const events = Array.isArray(body?.events) ? body.events : [];
+  const attendance = Array.isArray(body?.attendance) ? body.attendance : [];
+  const managedUserIds = Array.isArray(body?.managedUserIds)
+    ? [...new Set(body.managedUserIds.map(v => String(v || '').trim()).filter(Boolean))]
+    : [];
+  const syncFrom = String(body?.syncFrom || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(syncFrom)) {
+    return json({ error: 'Chybí nebo je neplatné syncFrom.' }, 400, headers);
+  }
+
+  if (events.length > 500 || attendance.length > 5000 || managedUserIds.length > 20) {
+    return json({ error: 'Import tréninkového kalendáře je příliš velký.' }, 400, headers);
+  }
+  if (!managedUserIds.length) {
+    return json({ error: 'Chybí managedUserIds pro automatickou docházku.' }, 400, headers);
+  }
+
+  const cleanEvents = [];
+  const incomingIds = new Set();
+  for (const event of events) {
+    if (!event?.id || !event?.date || event?.source?.type !== 'training_sheet' || event.type !== 'training') {
+      return json({ error: 'Neplatná událost v tréninkovém kalendáři.' }, 400, headers);
+    }
+    const id = String(event.id);
+    if (incomingIds.has(id)) return json({ error: `Duplicitní event ID: ${id}` }, 400, headers);
+    incomingIds.add(id);
+    cleanEvents.push(event);
+  }
+
+  const activeUsers = await db(env).prepare(
+    'SELECT id FROM users WHERE active=1'
+  ).all();
+  const activeUserIds = new Set((activeUsers.results || []).map(row => String(row.id)));
+  const managed = managedUserIds.filter(id => activeUserIds.has(id));
+  if (!managed.length) {
+    return json({ error: 'Žádný managedUserId neodpovídá aktivnímu uživateli.' }, 400, headers);
+  }
+
+  const cleanAttendance = [];
+  const seenAttendance = new Set();
+  for (const item of attendance) {
+    const eventId = String(item?.eventId || '').trim();
+    const userId = String(item?.userId || '').trim();
+    const status = String(item?.status || '').trim();
+    if (!incomingIds.has(eventId) || !managed.includes(userId) || !['yes','maybe','no'].includes(status)) {
+      return json({ error: 'Neplatný řádek automatické docházky.' }, 400, headers);
+    }
+    const key = `${eventId}|${userId}`;
+    if (seenAttendance.has(key)) continue;
+    seenAttendance.add(key);
+    cleanAttendance.push({ eventId, userId, status });
+  }
+
+  const database = db(env);
+  // Spravujeme jen dnešní a budoucí automatické tréninky.
+  // Historické tréninky a jejich docházka zůstávají zachované.
+  const { results: existingRows } = await database.prepare(
+    "SELECT id FROM events WHERE source_type='training_sheet' AND date>=?"
+  ).bind(syncFrom).all();
+
+  // 1) Nejdřív UPSERT eventů, aby případná existující attendance nezmizela kvůli změně payloadu.
+  for (let i = 0; i < cleanEvents.length; i += 50) {
+    await database.batch(cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e)));
+  }
+
+  // 2) U hráčů spravovaných Google tabulkou nastavujeme stav autoritativně.
+  // Smažeme jejich staré odpovědi na aktuálních auto-trénincích a vložíme nový yes/maybe/no.
+  if (cleanEvents.length && managed.length) {
+    const placeholders = managed.map(() => '?').join(',');
+    const deletes = cleanEvents.map(event =>
+      database.prepare(
+        `DELETE FROM attendance WHERE event_id=? AND user_id IN (${placeholders})`
+      ).bind(String(event.id), ...managed)
+    );
+    for (let i = 0; i < deletes.length; i += 50) {
+      await database.batch(deletes.slice(i, i + 50));
+    }
+  }
+
+  const attendanceStatements = cleanAttendance.map(item => database.prepare(`
+    INSERT INTO attendance(event_id,user_id,status,updated_at)
+    VALUES(?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(event_id,user_id) DO UPDATE SET
+      status=excluded.status,
+      updated_at=CURRENT_TIMESTAMP
+  `).bind(item.eventId, item.userId, item.status));
+
+  for (let i = 0; i < attendanceStatements.length; i += 50) {
+    await database.batch(attendanceStatements.slice(i, i + 50));
+  }
+
+  // 3) Auto-tréninky, které už tabulka negeneruje, odstraníme.
+  // Tím se přes ON DELETE CASCADE odstraní i jejich docházka.
+  const staleIds = (existingRows || [])
+    .map(row => String(row.id))
+    .filter(id => !incomingIds.has(id));
+
+  for (let i = 0; i < staleIds.length; i += 50) {
+    await database.batch(
+      staleIds.slice(i, i + 50).map(id =>
+        database.prepare('DELETE FROM events WHERE id=?').bind(id)
+      )
+    );
+  }
+
+  return json({
+    ok: true,
+    imported: cleanEvents.length,
+    attendance: cleanAttendance.length,
+    removed: staleIds.length,
+    managedUsers: managed.length
   }, 200, headers);
 }
 

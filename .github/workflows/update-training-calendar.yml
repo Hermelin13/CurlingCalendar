@@ -1,0 +1,28 @@
+name: Synchronizace treninkoveho kalendare
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * *"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalace requests
+        run: pip install requests==2.32.5
+
+      - name: Synchronizace treninku a dochazky
+        env:
+          API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
+          IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
+        run: python scripts/import_training_calendar.py

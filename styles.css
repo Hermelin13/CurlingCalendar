@@ -10,6 +10,8 @@
   --pdf: #d4475b;
   --ical: #3f6fd8;
   --manual: #8a5a17;
+  --training-sheet: #8a5a17;
+  --eliska: #7c3aed;
   --yes: #137333;
   --maybe: #a15c00;
   --no: #b3261e;
@@ -56,6 +58,8 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
 .event-chip.source-pdf { border-color: var(--pdf); background: #fff0f2; }
 .event-chip.source-ical { border-color: var(--ical); background: #eef3ff; }
 .event-chip.source-manual { border-color: var(--manual); background: #fff6e9; }
+.event-chip.source-training_sheet { border-color: var(--training-sheet); background: #fff6e9; }
+.event-chip.training-eliska { border-color: var(--eliska); background: #f3e8ff; }
 .sidebar { padding: 18px; align-self: start; }
 .sidebar-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
 .sidebar-head h2 { margin: 0; font-size: 1.1rem; }
@@ -71,6 +75,9 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
 .legend h3 { color: var(--text); margin-bottom: 2px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 7px; }
 .dot.source-excel { background: var(--excel); } .dot.source-pdf { background: var(--pdf); } .dot.source-ical { background: var(--ical); } .dot.source-manual { background: var(--manual); }
+.dot.source-training_sheet { background: var(--training-sheet); }
+.dot.training-eliska { background: var(--eliska); }
+.upcoming-item.training-eliska { border-color:#d8b4fe; background:#faf5ff; }
 .modal { border: 0; padding: 0; border-radius: 18px; width: min(620px, calc(100vw - 28px)); box-shadow: 0 30px 80px rgba(0,0,0,.3); }
 .modal::backdrop { background: rgba(18, 28, 45, .56); backdrop-filter: blur(3px); }
 .modal-card { padding: 24px; position: relative; background: var(--panel); color: var(--text); }
@@ -150,6 +157,9 @@ h1 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); }
   .field input, .field textarea, .rsvp { background:#111721; color:var(--text); }
   .calendar-panel .button.secondary, .calendar-panel .icon-button { background:#222b39; color:#dbe8ff; border-color:#303c4c; }
   .date-box { background:#202a38; color:#dbe8ff; }
+  .event-chip.source-training_sheet { background:#fff6e9; }
+  .event-chip.training-eliska { background:#f3e8ff; }
+  .upcoming-item.training-eliska { background:#241735; border-color:#6d4aa0; }
 }
 .field select { width: 100%; border: 1px solid var(--line); background: #fff; color: var(--text); border-radius: 10px; padding: 10px; font-weight: 500; }
 @media (prefers-color-scheme: dark) { .field select { background:#111721; color:var(--text); } }
