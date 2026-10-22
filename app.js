@@ -47,6 +47,7 @@ const quickRsvp = {
 function canQuickRsvp(event) {
   return Boolean(
     event?.attendanceEnabled &&
+    !event?.cancelled &&
     state.user &&
     state.token
   );
@@ -370,9 +371,9 @@ function renderCalendar() {
     day.innerHTML = `<div class="day-number">${d.getDate()}</div>`;
     events.filter(e => e.date === key).sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||'')).forEach(e => {
       const btn = document.createElement('button');
-      btn.className = `event-chip source-${sourceType(e)}${isEliskaTraining(e) ? ' training-eliska' : ''}`;
+      btn.className = `event-chip source-${sourceType(e)}${isEliskaTraining(e) ? ' training-eliska' : ''}${e.cancelled ? ' cancelled' : ''}`;
       const time = e.allDay ? 'celý den' : ([e.startTime, e.endTime].filter(Boolean).join('–') || '');
-      btn.innerHTML = `<strong>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled ? availabilityHtml(e.id) : ''}`;
+      btn.innerHTML = `<strong>${e.cancelled ? '<span class="cancelled-badge">ZRUŠENO</span> ' : ''}${escapeHtml(e.title)} ${resultBadgeHtml(e)}</strong><small>${escapeHtml(time)}${e.rink ? ` • dráha ${escapeHtml(e.rink)}` : ''}</small>${e.attendanceEnabled && !e.cancelled ? availabilityHtml(e.id) : ''}`;
       attachQuickAttendance(btn, e);
       btn.addEventListener('click', () => openEventFromTap(e));
       day.appendChild(btn);
@@ -389,8 +390,8 @@ function renderUpcoming() {
   events.slice(0, 10).forEach(e => {
     const d = new Date(`${e.date}T12:00:00`);
     const btn = document.createElement('button');
-    btn.className = `upcoming-item${isEliskaTraining(e) ? ' training-eliska' : ''}`;
-    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.allDay ? 'celý den' : ([e.startTime, e.endTime].filter(Boolean).join('–') || 'celý den'))}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled ? availabilityHtml(e.id, false) : ''}</span>`;
+    btn.className = `upcoming-item${isEliskaTraining(e) ? ' training-eliska' : ''}${e.cancelled ? ' cancelled' : ''}`;
+    btn.innerHTML = `<span class="date-box"><strong>${d.getDate()}</strong><span>${new Intl.DateTimeFormat('cs-CZ',{month:'short'}).format(d)}</span></span><span><h3>${e.cancelled ? '<span class="cancelled-badge">ZRUŠENO</span> ' : ''}${escapeHtml(e.title)} ${resultBadgeHtml(e)}</h3><p>${escapeHtml(e.allDay ? 'celý den' : ([e.startTime, e.endTime].filter(Boolean).join('–') || 'celý den'))}${e.location ? ` • ${escapeHtml(e.location)}` : ''}</p>${e.attendanceEnabled && !e.cancelled ? availabilityHtml(e.id, false) : ''}</span>`;
     attachQuickAttendance(btn, e);
     btn.addEventListener('click', ()=>openEventFromTap(e));
     box.appendChild(btn);
@@ -403,6 +404,7 @@ async function openEvent(e) {
   $('#event-source').textContent = `${sourceLabel(sourceType(e))}${e.competition ? ` • ${e.competition}` : ''}`;
   $('#event-title').textContent = e.title;
   const meta = [
+    ...(e.cancelled ? [['Stav', 'ZRUŠENO']] : []),
     ['Datum', formatDateCZ(e.date)],
     ['Čas', e.allDay ? 'Celý den' : [e.startTime, e.endTime].filter(Boolean).join('–')],
     ['Místo', e.location || '—'], ['Dráha', e.rink || '—'], ['Soupeř', e.opponent || '—'],
@@ -413,14 +415,17 @@ async function openEvent(e) {
 
   renderResultSection(e);
 
-  $('#attendance-section').classList.toggle('hidden', !e.attendanceEnabled);
-  if (e.attendanceEnabled) await renderAttendance(e);
+  $('#attendance-section').classList.toggle('hidden', !e.attendanceEnabled || e.cancelled);
+  if (e.attendanceEnabled && !e.cancelled) await renderAttendance(e);
 
   const actions = $('#event-actions'); actions.innerHTML = '';
-  if (sourceType(e) === 'manual' && state.user?.canManageTrainings) {
-    const del = document.createElement('button');
-    del.type = 'button'; del.className = 'button danger'; del.textContent = 'Smazat trénink';
-    del.onclick = () => deleteManualEvent(e); actions.appendChild(del);
+  if (state.user?.isCaptain && !e.cancelled) {
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'button danger';
+    cancel.textContent = 'Zrušit událost';
+    cancel.onclick = () => cancelEvent(e);
+    actions.appendChild(cancel);
   }
   $('#event-dialog').showModal();
 }
@@ -448,8 +453,8 @@ function renderResultSection(event) {
     readonly.innerHTML = '<p class="small-muted">Výsledek zatím není zadaný.</p>';
   }
 
-  editor.classList.toggle('hidden', !state.user);
-  if (state.user) {
+  editor.classList.toggle('hidden', !state.user || event.cancelled);
+  if (state.user && !event.cancelled) {
     $('#result-our-score').value = event.result?.ourScore ?? '';
     $('#result-opponent-score').value = event.result?.opponentScore ?? '';
     $('#result-note').value = event.result?.note || '';
@@ -512,8 +517,12 @@ async function renderAttendance(event) {
       [['yes','Ano'],['maybe','Možná'],['no','Ne']].forEach(([key,label]) => {
         const b=document.createElement('button'); b.type='button'; b.className=`rsvp ${key} ${status===key?'active':''}`; b.textContent=label;
         const mine = state.user && state.user.id === rowData.id;
-        b.disabled = !mine;
-        if (mine) b.addEventListener('click', () => saveAttendance(event.id, key));
+        const canEdit = Boolean(mine || state.user?.isCaptain);
+        b.disabled = !canEdit;
+        if (canEdit) {
+          b.addEventListener('click', () => saveAttendance(event.id, key, rowData.id));
+          if (!mine && state.user?.isCaptain) b.title = `Upravit účast: ${rowData.name}`;
+        }
         row.appendChild(b);
       });
       list.appendChild(row);
@@ -524,10 +533,13 @@ async function renderAttendance(event) {
   }
 }
 
-async function saveAttendance(eventId, status) {
+async function saveAttendance(eventId, status, userId = state.user?.id) {
   if (!state.user || !state.token) return showToast('Nejdřív se přihlas PINem.');
   try {
-    await api('/api/attendance', { method:'PUT', body:JSON.stringify({ eventId, status }) });
+    await api('/api/attendance', {
+      method:'PUT',
+      body:JSON.stringify({ eventId, status, userId })
+    });
     showToast('Účast uložena.'); await Promise.all([renderAttendance(state.selectedEvent), loadAttendanceSummary()]); renderAll();
   } catch (err) { showToast(`Uložení se nepovedlo: ${err.message}`); }
 }
@@ -547,12 +559,27 @@ async function addTraining(formEvent) {
   } catch (err) { $('#training-error').textContent=err.message; }
 }
 
-async function deleteManualEvent(event) {
-  if (!confirm(`Smazat „${event.title}“ ${formatDateCZ(event.date, false)}?`)) return;
+async function cancelEvent(event) {
+  if (!state.user?.isCaptain) return showToast('Události může rušit jen Adam.');
+  if (!confirm(`Opravdu zrušit „${event.title}“ ${formatDateCZ(event.date, false)}? Událost zůstane označená jako zrušená a import ji už neobnoví.`)) return;
+
   try {
-    await api(`/api/trainings/${encodeURIComponent(event.id)}`, { method:'DELETE' });
-    state.events = state.events.filter(e => e.id !== event.id); $('#event-dialog').close(); renderAll(); showToast('Trénink smazán.');
-  } catch (err) { showToast(err.message); }
+    await api('/api/events/cancel', {
+      method: 'PUT',
+      body: JSON.stringify({ eventId: event.id })
+    });
+
+    event.cancelled = true;
+    event.cancelledBy = state.user.id;
+    event.cancelledAt = new Date().toISOString();
+
+    await loadAttendanceSummary();
+    $('#event-dialog').close();
+    renderAll();
+    showToast('Událost byla zrušena.');
+  } catch (err) {
+    showToast(err.message);
+  }
 }
 
 async function login(userId, pin) {

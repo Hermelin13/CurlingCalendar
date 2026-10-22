@@ -32,6 +32,11 @@ export default {
       if (url.pathname === '/api/events' && request.method === 'GET') {
         return listEvents(env, cors.headers);
       }
+      if (url.pathname === '/api/events/cancel' && request.method === 'PUT') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        return cancelEvent(request, env, auth.user, cors.headers);
+      }
       if (url.pathname === '/api/results' && request.method === 'PUT') {
         const auth = await requireUser(request, env);
         if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
@@ -113,8 +118,18 @@ function json(data, status = 200, extra = {}) {
   });
 }
 
+function isCaptainUser(u) {
+  return String(u?.id || '').trim().toLowerCase() === 'adam' ||
+    String(u?.name || '').trim().toLowerCase() === 'adam';
+}
+
 function publicUser(u) {
-  return { id: u.id, name: u.name, canManageTrainings: Boolean(u.can_manage_trainings) };
+  return {
+    id: u.id,
+    name: u.name,
+    canManageTrainings: Boolean(u.can_manage_trainings),
+    isCaptain: isCaptainUser(u)
+  };
 }
 
 function db(env) {
@@ -171,7 +186,7 @@ async function requireUser(request, env) {
 
 async function listEvents(env, headers) {
   const { results } = await db(env).prepare(`
-    SELECT e.payload_json,
+    SELECT e.payload_json, e.cancelled, e.cancelled_by, e.cancelled_at,
            r.our_score, r.opponent_score, r.note,
            r.lsd_advantage, r.our_lsd1, r.our_lsd2,
            r.opponent_lsd1, r.opponent_lsd2,
@@ -184,6 +199,9 @@ async function listEvents(env, headers) {
 
   const events = results.map(row => {
     const event = JSON.parse(row.payload_json);
+    event.cancelled = Boolean(row.cancelled);
+    event.cancelledBy = row.cancelled_by || null;
+    event.cancelledAt = row.cancelled_at || null;
     if (row.our_score !== null && row.our_score !== undefined &&
         row.opponent_score !== null && row.opponent_score !== undefined) {
       event.result = {
@@ -209,6 +227,35 @@ async function listEvents(env, headers) {
 }
 
 
+
+async function cancelEvent(request, env, user, headers) {
+  if (!isCaptainUser(user)) {
+    return json({ error: 'Události může rušit jen Adam.' }, 403, headers);
+  }
+
+  const body = await readJson(request);
+  const eventId = String(body?.eventId || '').trim();
+  if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
+
+  const event = await db(env).prepare(
+    'SELECT id, cancelled FROM events WHERE id=?'
+  ).bind(eventId).first();
+
+  if (!event) return json({ error: 'Událost neexistuje.' }, 404, headers);
+
+  if (!event.cancelled) {
+    await db(env).prepare(`
+      UPDATE events
+      SET cancelled=1,
+          cancelled_by=?,
+          cancelled_at=CURRENT_TIMESTAMP,
+          updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+    `).bind(user.id, eventId).run();
+  }
+
+  return json({ ok: true, eventId, cancelled: true }, 200, headers);
+}
 async function saveResult(request, env, user, headers) {
   const body = await readJson(request);
   const eventId = String(body.eventId || '').trim();
@@ -221,8 +268,11 @@ async function saveResult(request, env, user, headers) {
     return json({ error: 'Zadej platný výsledek 0–99 pro oba týmy.' }, 400, headers);
   }
 
-  const row = await db(env).prepare('SELECT payload_json FROM events WHERE id=?').bind(eventId).first();
+  const row = await db(env).prepare(
+    'SELECT payload_json, cancelled FROM events WHERE id=?'
+  ).bind(eventId).first();
   if (!row) return json({ error: 'Zápas neexistuje.' }, 404, headers);
+  if (row.cancelled) return json({ error: 'Zrušenému zápasu nelze měnit výsledek.' }, 400, headers);
 
   let event;
   try { event = JSON.parse(row.payload_json); }
@@ -267,6 +317,7 @@ async function getStats(env, headers) {
            r.result_source, r.source_url, r.updated_at
     FROM events e
            JOIN match_results r ON r.event_id=e.id
+    WHERE e.cancelled=0
     ORDER BY e.date DESC, COALESCE(e.start_time, '') DESC, e.id DESC
   `).all();
 
@@ -395,7 +446,7 @@ async function getAttendanceSummary(env, headers) {
     FROM events e
            CROSS JOIN users u
            LEFT JOIN attendance a ON a.event_id=e.id AND a.user_id=u.id
-    WHERE e.attendance_enabled=1 AND u.active=1
+    WHERE e.attendance_enabled=1 AND e.cancelled=0 AND u.active=1
     ORDER BY e.date, e.start_time, u.name
   `).all();
   const events = {};
@@ -410,14 +461,51 @@ async function saveAttendance(request, env, user, headers) {
   const body = await readJson(request);
   const eventId = String(body.eventId || '').trim();
   const status = String(body.status || '').trim();
-  if (!eventId || !['yes','maybe','no'].includes(status)) return json({ error: 'Neplatná odpověď.' }, 400, headers);
-  const event = await db(env).prepare('SELECT attendance_enabled FROM events WHERE id=?').bind(eventId).first();
-  if (!event || !event.attendance_enabled) return json({ error: 'U této události není docházka povolena.' }, 400, headers);
+  const targetUserId = String(body.userId || user.id || '').trim();
+
+  if (!eventId || !targetUserId || !['yes','maybe','no'].includes(status)) {
+    return json({ error: 'Neplatná odpověď.' }, 400, headers);
+  }
+
+  if (targetUserId !== String(user.id) && !isCaptainUser(user)) {
+    return json({ error: 'Účast jiného hráče může měnit jen Adam.' }, 403, headers);
+  }
+
+  const event = await db(env).prepare(
+    'SELECT attendance_enabled, cancelled FROM events WHERE id=?'
+  ).bind(eventId).first();
+
+  if (!event || !event.attendance_enabled) {
+    return json({ error: 'U této události není docházka povolena.' }, 400, headers);
+  }
+  if (event.cancelled) {
+    return json({ error: 'U zrušené události nelze měnit účast.' }, 400, headers);
+  }
+
+  const targetUser = await db(env).prepare(
+    'SELECT id, active FROM users WHERE id=?'
+  ).bind(targetUserId).first();
+
+  if (!targetUser || !targetUser.active) {
+    return json({ error: 'Hráč neexistuje nebo není aktivní.' }, 404, headers);
+  }
+
   await db(env).prepare(`
-    INSERT INTO attendance(event_id,user_id,status,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)
-      ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status, updated_at=CURRENT_TIMESTAMP
-  `).bind(eventId, user.id, status).run();
-  return json({ ok: true, status }, 200, headers);
+    INSERT INTO attendance(event_id,user_id,status,source,updated_by,updated_at)
+    VALUES(?,?,?,'manual',?,CURRENT_TIMESTAMP)
+    ON CONFLICT(event_id,user_id) DO UPDATE SET
+      status=excluded.status,
+      source='manual',
+      updated_by=excluded.updated_by,
+      updated_at=CURRENT_TIMESTAMP
+  `).bind(eventId, targetUserId, status, user.id).run();
+
+  return json({
+    ok: true,
+    status,
+    userId: targetUserId,
+    overriddenByCaptain: targetUserId !== String(user.id)
+  }, 200, headers);
 }
 
 async function addTraining(request, env, user, headers) {
@@ -476,7 +564,7 @@ async function importEvents(request, env, headers) {
   // takže původní DELETE mazal spolu s událostmi i veškerou docházku.
   // Nejdřív provedeme UPSERT stávajících událostí, čímž jejich řádky i docházka zůstanou.
   const { results: existingRows } = await database.prepare(
-      "SELECT id FROM events WHERE source_type IN ('excel','pdf','ical')"
+      "SELECT id FROM events WHERE source_type IN ('excel','pdf','ical') AND cancelled=0"
   ).all();
 
   for (let i = 0; i < cleanEvents.length; i += 50) {
@@ -566,7 +654,7 @@ async function importTrainingCalendar(request, env, headers) {
   // Spravujeme jen dnešní a budoucí automatické tréninky.
   // Historické tréninky a jejich docházka zůstávají zachované.
   const { results: existingRows } = await database.prepare(
-    "SELECT id FROM events WHERE source_type='training_sheet' AND date>=?"
+    "SELECT id FROM events WHERE source_type='training_sheet' AND date>=? AND cancelled=0"
   ).bind(syncFrom).all();
 
   // 1) Nejdřív UPSERT eventů, aby případná existující attendance nezmizela kvůli změně payloadu.
@@ -574,13 +662,21 @@ async function importTrainingCalendar(request, env, headers) {
     await database.batch(cleanEvents.slice(i, i + 50).map(e => eventStatement(env, e)));
   }
 
+  const { results: cancelledRows } = await database.prepare(
+    "SELECT id FROM events WHERE source_type='training_sheet' AND date>=? AND cancelled=1"
+  ).bind(syncFrom).all();
+  const cancelledIds = new Set((cancelledRows || []).map(row => String(row.id)));
+  const activeCleanEvents = cleanEvents.filter(event => !cancelledIds.has(String(event.id)));
+  const activeAttendance = cleanAttendance.filter(item => !cancelledIds.has(item.eventId));
+
   // 2) U hráčů spravovaných Google tabulkou nastavujeme stav autoritativně.
   // Smažeme jejich staré odpovědi na aktuálních auto-trénincích a vložíme nový yes/maybe/no.
-  if (cleanEvents.length && managed.length) {
+  if (activeCleanEvents.length && managed.length) {
     const placeholders = managed.map(() => '?').join(',');
-    const deletes = cleanEvents.map(event =>
+    const deletes = activeCleanEvents.map(event =>
       database.prepare(
-        `DELETE FROM attendance WHERE event_id=? AND user_id IN (${placeholders})`
+        `DELETE FROM attendance
+         WHERE event_id=? AND user_id IN (${placeholders}) AND source='training_sheet'`
       ).bind(String(event.id), ...managed)
     );
     for (let i = 0; i < deletes.length; i += 50) {
@@ -588,12 +684,15 @@ async function importTrainingCalendar(request, env, headers) {
     }
   }
 
-  const attendanceStatements = cleanAttendance.map(item => database.prepare(`
-    INSERT INTO attendance(event_id,user_id,status,updated_at)
-    VALUES(?,?,?,CURRENT_TIMESTAMP)
+  const attendanceStatements = activeAttendance.map(item => database.prepare(`
+    INSERT INTO attendance(event_id,user_id,status,source,updated_by,updated_at)
+    VALUES(?,?,?,'training_sheet',NULL,CURRENT_TIMESTAMP)
     ON CONFLICT(event_id,user_id) DO UPDATE SET
       status=excluded.status,
+      source='training_sheet',
+      updated_by=NULL,
       updated_at=CURRENT_TIMESTAMP
+    WHERE attendance.source='training_sheet'
   `).bind(item.eventId, item.userId, item.status));
 
   for (let i = 0; i < attendanceStatements.length; i += 50) {
@@ -617,8 +716,9 @@ async function importTrainingCalendar(request, env, headers) {
   return json({
     ok: true,
     imported: cleanEvents.length,
-    attendance: cleanAttendance.length,
+    attendance: activeAttendance.length,
     removed: staleIds.length,
+    skippedCancelled: cancelledIds.size,
     managedUsers: managed.length
   }, 200, headers);
 }
@@ -649,10 +749,10 @@ async function importOfficialResults(request, env, headers) {
     }
 
     const eventRow = await database.prepare(
-      'SELECT payload_json FROM events WHERE id=?'
+      'SELECT payload_json, cancelled FROM events WHERE id=?'
     ).bind(eventId).first();
 
-    if (!eventRow) {
+    if (!eventRow || eventRow.cancelled) {
       skipped++;
       continue;
     }

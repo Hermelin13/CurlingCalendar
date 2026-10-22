@@ -393,3 +393,42 @@ body.quick-rsvp-active {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Zrušené události */
+.event-chip.cancelled,
+.upcoming-item.cancelled {
+  border-color: #dc6b64;
+  background: #fff1f0;
+  opacity: .82;
+}
+.event-chip.cancelled strong,
+.upcoming-item.cancelled h3 {
+  text-decoration: line-through;
+}
+.cancelled-badge {
+  display: inline-block;
+  text-decoration: none;
+  color: #b42318;
+  background: #fee4e2;
+  border: 1px solid #fecdca;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: .64rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  vertical-align: middle;
+}
+
+@media (prefers-color-scheme: dark) {
+  .event-chip.cancelled,
+  .upcoming-item.cancelled {
+    background: #351918;
+    border-color: #7a3a36;
+  }
+  .cancelled-badge {
+    color: #ffb4ab;
+    background: #4a201e;
+    border-color: #7a3a36;
+  }
+}
