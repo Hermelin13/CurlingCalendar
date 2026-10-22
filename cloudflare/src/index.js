@@ -194,7 +194,6 @@ async function listEvents(env, headers) {
            r.updated_at AS result_updated_at
     FROM events e
            LEFT JOIN match_results r ON r.event_id=e.id
-    WHERE e.cancelled=0
     ORDER BY e.date, COALESCE(e.start_time, ''), e.id
   `).all();
 
@@ -230,19 +229,30 @@ async function listEvents(env, headers) {
 
 
 async function cancelEvent(request, env, user, headers) {
-  if (!isCaptainUser(user)) {
-    return json({ error: 'Události může rušit jen Adam.' }, 403, headers);
-  }
-
   const body = await readJson(request);
   const eventId = String(body?.eventId || '').trim();
   if (!eventId) return json({ error: 'Chybí eventId.' }, 400, headers);
 
   const event = await db(env).prepare(
-    'SELECT id, cancelled FROM events WHERE id=?'
+    'SELECT id, source_type, payload_json, cancelled FROM events WHERE id=?'
   ).bind(eventId).first();
 
   if (!event) return json({ error: 'Událost neexistuje.' }, 404, headers);
+
+  let payload = {};
+  try {
+    payload = JSON.parse(event.payload_json || '{}');
+  } catch (_) {}
+
+  const isTraining = String(payload?.type || '').toLowerCase() === 'training';
+  const isAllowedTrainingSource =
+    event.source_type === 'manual' || event.source_type === 'training_sheet';
+
+  if (!isCaptainUser(user) && !(isTraining && isAllowedTrainingSource)) {
+    return json({
+      error: 'Ostatní uživatelé mohou rušit jen ruční a automatické tréninky.'
+    }, 403, headers);
+  }
 
   if (!event.cancelled) {
     await db(env).prepare(`

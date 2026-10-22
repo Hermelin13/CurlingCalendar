@@ -53,6 +53,14 @@ function canQuickRsvp(event) {
   );
 }
 
+function canCancelEvent(event) {
+  if (!state.user || !state.token || event?.cancelled) return false;
+  if (state.user.isCaptain) return true;
+
+  const source = sourceType(event);
+  return event?.type === 'training' && (source === 'manual' || source === 'training_sheet');
+}
+
 function clearQuickRsvpTimer() {
   if (quickRsvp.timer) {
     clearTimeout(quickRsvp.timer);
@@ -419,11 +427,11 @@ async function openEvent(e) {
   if (e.attendanceEnabled && !e.cancelled) await renderAttendance(e);
 
   const actions = $('#event-actions'); actions.innerHTML = '';
-  if (state.user?.isCaptain && !e.cancelled) {
+  if (canCancelEvent(e)) {
     const cancel = document.createElement('button');
     cancel.type = 'button';
     cancel.className = 'button danger';
-    cancel.textContent = 'Zrušit událost';
+    cancel.textContent = state.user?.isCaptain ? 'Zrušit událost' : 'Zrušit trénink';
     cancel.onclick = () => cancelEvent(e);
     actions.appendChild(cancel);
   }
@@ -560,8 +568,12 @@ async function addTraining(formEvent) {
 }
 
 async function cancelEvent(event) {
-  if (!state.user?.isCaptain) return showToast('Události může rušit jen Adam.');
-  if (!confirm(`Opravdu zrušit „${event.title}“ ${formatDateCZ(event.date, false)}? Událost zůstane označená jako zrušená a import ji už neobnoví.`)) return;
+  if (!canCancelEvent(event)) {
+    return showToast('Tuto událost nemáš oprávnění zrušit.');
+  }
+
+  const label = event.type === 'training' ? 'trénink' : 'událost';
+  if (!confirm(`Opravdu zrušit ${label} „${event.title}“ ${formatDateCZ(event.date, false)}? Zůstane uložený v databázi a import ho už neobnoví.`)) return;
 
   try {
     await api('/api/events/cancel', {
