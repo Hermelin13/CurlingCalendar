@@ -569,14 +569,13 @@ async function cancelEvent(event) {
       body: JSON.stringify({ eventId: event.id })
     });
 
-    event.cancelled = true;
-    event.cancelledBy = state.user.id;
-    event.cancelledAt = new Date().toISOString();
+    state.events = state.events.filter(item => item.id !== event.id);
+    state.selectedEvent = null;
 
     await loadAttendanceSummary();
     $('#event-dialog').close();
     renderAll();
-    showToast('Událost byla zrušena.');
+    showToast('Událost byla zrušena a zmizela z kalendáře.');
   } catch (err) {
     showToast(err.message);
   }

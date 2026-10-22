@@ -194,6 +194,7 @@ async function listEvents(env, headers) {
            r.updated_at AS result_updated_at
     FROM events e
            LEFT JOIN match_results r ON r.event_id=e.id
+    WHERE e.cancelled=0
     ORDER BY e.date, COALESCE(e.start_time, ''), e.id
   `).all();
 
