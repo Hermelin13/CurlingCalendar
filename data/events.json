@@ -1,49 +1,5 @@
 [
   {
-    "id": "ical-cdb66e324978",
-    "type": "event",
-    "title": "Přihlášení na Brněnský Pohár",
-    "team": "CB BUTchers",
-    "opponent": null,
-    "date": "2025-08-31",
-    "startTime": "23:58",
-    "endTime": "23:59",
-    "allDay": false,
-    "location": null,
-    "rink": null,
-    "competition": null,
-    "description": null,
-    "source": {
-      "type": "ical",
-      "name": "Curling Brno EOS",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
-    "id": "ical-20cef491209e",
-    "type": "event",
-    "title": "Den Otevřených Dvěří",
-    "team": "CB BUTchers",
-    "opponent": null,
-    "date": "2025-10-12",
-    "startTime": "13:00",
-    "endTime": "18:00",
-    "allDay": false,
-    "location": "Curling Brno",
-    "rink": null,
-    "competition": null,
-    "description": "Curling Brno - všichni",
-    "source": {
-      "type": "ical",
-      "name": "Curling Brno EOS",
-      "url": null
-    },
-    "editable": false,
-    "attendanceEnabled": true
-  },
-  {
     "id": "ical-c5f37bd2848c",
     "type": "event",
     "title": "Beseda: 🥌POZNEJ HISTORII A ETIKU CURLINGU",
