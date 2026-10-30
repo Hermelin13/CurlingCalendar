@@ -589,15 +589,23 @@ async function addTraining(formEvent) {
       })
     });
 
-    state.events.push(body.event);
-    state.events.sort((a, b) => eventDateTime(a) - eventDateTime(b));
+    // Znovu načteme /api/events, protože server na něj aplikuje iSport konflikty.
+    // Trénink zůstává uložený v D1, ale při plné obsazenosti se v kalendáři nezobrazí.
+    state.events = (await loadEvents()).filter(event => !event?.cancelled);
+    const isVisible = state.events.some(event => event.id === body.event?.id);
+
     await loadAttendanceSummary();
     renderAll();
 
     trainingDialog.close();
     trainingForm.reset();
     trainingLocation.value = 'Curling Brno';
-    showToast('Trénink přidán.');
+
+    showToast(
+      isVisible
+        ? 'Trénink přidán.'
+        : 'Trénink uložen, ale iSport hlásí plnou obsazenost – v kalendáři je dočasně skrytý.'
+    );
   } catch (err) {
     trainingError.textContent = err.message;
   }

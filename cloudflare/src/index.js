@@ -221,7 +221,11 @@ async function listEvents(env, headers) {
       if (source === 'isport' && !isportState.activeEventIds.has(String(row.id))) {
         continue;
       }
-      if (source === 'training_sheet' && trainingBlockedByIsport(event, isportState)) {
+      const isConflictCheckedTraining =
+        event?.type === 'training' &&
+        (source === 'training_sheet' || source === 'manual');
+
+      if (isConflictCheckedTraining && trainingBlockedByIsport(event, isportState)) {
         continue;
       }
     }
@@ -321,6 +325,16 @@ function intervalsOverlap(startA, endA, startB, endB) {
   return a1 < b2 && b1 < a2;
 }
 
+function normalizeLaneKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\bdraha\b/g, '')
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+}
+
 function trainingBlockedByIsport(event, state) {
   const date = String(event?.date || '');
   const day = state.days.get(date);
@@ -332,9 +346,17 @@ function trainingBlockedByIsport(event, state) {
 
   const foreignBusy = (state.slotsByDate.get(date) || []).filter(slot => slot.kind === 'busy');
 
-  // Trénink potřebuje jednu dráhu, která je volná po celý interval.
-  // Naše vlastní rezervace se jako konflikt nepočítá.
-  const hasUsableLane = day.lanes.some(lane =>
+  // Pokud má ruční trénink konkrétní dráhu, kontrolujeme právě ji.
+  // Jinak stačí jedna volná dráha po celý interval.
+  let candidateLanes = day.lanes;
+  const requestedRink = normalizeLaneKey(event?.rink);
+  if (requestedRink) {
+    const matching = day.lanes.filter(lane => normalizeLaneKey(lane) === requestedRink);
+    if (matching.length) candidateLanes = matching;
+  }
+
+  // Naše vlastní iSport rezervace se jako cizí konflikt nepočítá.
+  const hasUsableLane = candidateLanes.some(lane =>
     !foreignBusy.some(slot =>
       slot.lane === lane && intervalsOverlap(startTime, endTime, slot.startTime, slot.endTime)
     )
