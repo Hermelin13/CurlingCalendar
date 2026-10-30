@@ -28,7 +28,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const pad = (n) => String(n).padStart(2, '0');
 const isoDate = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const sourceType = (e) => e?.source?.type || 'manual';
-const filterType = (e) => sourceType(e) === 'training_sheet' ? 'manual' : sourceType(e);
+const filterType = (e) => ['training_sheet', 'isport'].includes(sourceType(e)) ? 'manual' : sourceType(e);
 const isEliskaTraining = (e) => sourceType(e) === 'training_sheet' && Boolean(e?.eliskaAvailable);
 
 
@@ -58,7 +58,7 @@ function canCancelEvent(event) {
   if (state.user.isCaptain) return true;
 
   const source = sourceType(event);
-  return event?.type === 'training' && (source === 'manual' || source === 'training_sheet');
+  return event?.type === 'training' && (source === 'manual' || source === 'training_sheet' || source === 'isport');
 }
 
 function clearQuickRsvpTimer() {
@@ -942,7 +942,7 @@ function updateLoginUI() {
   $('#mobile-match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
 }
 
-function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář'})[type] || type; }
+function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář', isport:'Rezervace iSport'})[type] || type; }
 function escapeHtml(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
 function showToast(text) { const t=$('#toast'); t.textContent=text; t.classList.add('show'); clearTimeout(showToast.timer); showToast.timer=setTimeout(()=>t.classList.remove('show'),3000); }
 function renderAll() { renderCalendar(); renderUpcoming(); }

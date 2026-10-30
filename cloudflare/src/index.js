@@ -74,6 +74,12 @@ export default {
         const id = decodeURIComponent(url.pathname.slice('/api/trainings/'.length));
         return deleteTraining(id, env, cors.headers);
       }
+      if (url.pathname === '/api/isport-sync' && request.method === 'POST') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        if (!isCaptainUser(auth.user)) return json({ error: 'Synchronizaci iSportu může spustit jen Adam.' }, 403, cors.headers);
+        return syncIsportReservations(request, env, auth.user, cors.headers);
+      }
       if (url.pathname === '/api/import' && request.method === 'POST') {
         if (!secretBearerMatches(request, env.IMPORT_TOKEN)) return json({ error: 'Neplatný import token.' }, 401, cors.headers);
         return importEvents(request, env, cors.headers);
@@ -186,7 +192,8 @@ async function requireUser(request, env) {
 
 async function listEvents(env, headers) {
   const { results } = await db(env).prepare(`
-    SELECT e.payload_json, e.cancelled, e.cancelled_by, e.cancelled_at,
+    SELECT e.id, e.source_type, e.date, e.start_time, e.payload_json,
+           e.cancelled, e.cancelled_by, e.cancelled_at,
            r.our_score, r.opponent_score, r.note,
            r.lsd_advantage, r.our_lsd1, r.our_lsd2,
            r.opponent_lsd1, r.opponent_lsd2,
@@ -198,8 +205,27 @@ async function listEvents(env, headers) {
     ORDER BY e.date, COALESCE(e.start_time, ''), e.id
   `).all();
 
-  const events = results.map(row => {
-    const event = JSON.parse(row.payload_json);
+  // iSport tabulky jsou samostatná doplňková vrstva. Pokud ještě není
+  // spuštěná migrace 0005, kalendář dál funguje bez iSport filtrování.
+  const isportState = await loadIsportReservationState(env);
+
+  const events = [];
+  for (const row of results) {
+    let event;
+    try { event = JSON.parse(row.payload_json); }
+    catch { continue; }
+
+    const source = String(row.source_type || event?.source?.type || '');
+
+    if (isportState) {
+      if (source === 'isport' && !isportState.activeEventIds.has(String(row.id))) {
+        continue;
+      }
+      if (source === 'training_sheet' && trainingBlockedByIsport(event, isportState)) {
+        continue;
+      }
+    }
+
     event.cancelled = Boolean(row.cancelled);
     event.cancelledBy = row.cancelled_by || null;
     event.cancelledAt = row.cancelled_at || null;
@@ -221,10 +247,100 @@ async function listEvents(env, headers) {
         updatedAt: row.result_updated_at || null
       };
     }
-    return event;
-  });
+    events.push(event);
+  }
 
   return json({ events }, 200, headers);
+}
+
+async function loadIsportReservationState(env) {
+  try {
+    const database = db(env);
+    const [daysResult, slotsResult, activeResult] = await Promise.all([
+      database.prepare('SELECT date, lanes_json, synced_at FROM isport_sync_days').all(),
+      database.prepare(`
+        SELECT date, lane, start_time, end_time, kind
+        FROM isport_reservation_slots
+        ORDER BY date, lane, start_time
+      `).all(),
+      database.prepare(`
+        SELECT event_id
+        FROM isport_reservation_events
+        WHERE active=1
+      `).all()
+    ]);
+
+    const days = new Map();
+    for (const row of daysResult.results || []) {
+      let lanes = [];
+      try { lanes = JSON.parse(row.lanes_json || '[]'); }
+      catch (_) {}
+      lanes = Array.isArray(lanes) ? lanes.map(v => String(v)).filter(Boolean) : [];
+      days.set(String(row.date), { lanes, syncedAt: row.synced_at || null });
+    }
+
+    const slotsByDate = new Map();
+    for (const row of slotsResult.results || []) {
+      const date = String(row.date || '');
+      if (!slotsByDate.has(date)) slotsByDate.set(date, []);
+      slotsByDate.get(date).push({
+        lane: String(row.lane || ''),
+        startTime: String(row.start_time || ''),
+        endTime: String(row.end_time || ''),
+        kind: String(row.kind || 'busy')
+      });
+    }
+
+    return {
+      days,
+      slotsByDate,
+      activeEventIds: new Set((activeResult.results || []).map(row => String(row.event_id)))
+    };
+  } catch (err) {
+    console.warn('iSport reservation state není dostupný; pokračuji bez něj.', err);
+    return null;
+  }
+}
+
+function minutesOfDay(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) ||
+      hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function intervalsOverlap(startA, endA, startB, endB) {
+  const a1 = minutesOfDay(startA);
+  const a2 = minutesOfDay(endA);
+  const b1 = minutesOfDay(startB);
+  const b2 = minutesOfDay(endB);
+  if ([a1, a2, b1, b2].some(v => v === null)) return false;
+  return a1 < b2 && b1 < a2;
+}
+
+function trainingBlockedByIsport(event, state) {
+  const date = String(event?.date || '');
+  const day = state.days.get(date);
+  if (!day || !day.lanes.length) return false;
+
+  const startTime = String(event?.startTime || '');
+  const endTime = String(event?.endTime || '');
+  if (minutesOfDay(startTime) === null || minutesOfDay(endTime) === null) return false;
+
+  const foreignBusy = (state.slotsByDate.get(date) || []).filter(slot => slot.kind === 'busy');
+
+  // Trénink potřebuje jednu dráhu, která je volná po celý interval.
+  // Naše vlastní rezervace se jako konflikt nepočítá.
+  const hasUsableLane = day.lanes.some(lane =>
+    !foreignBusy.some(slot =>
+      slot.lane === lane && intervalsOverlap(startTime, endTime, slot.startTime, slot.endTime)
+    )
+  );
+
+  return !hasUsableLane;
 }
 
 
@@ -247,7 +363,7 @@ async function cancelEvent(request, env, user, headers) {
 
   const isTraining = String(payload?.type || '').toLowerCase() === 'training';
   const isAllowedTrainingSource =
-    event.source_type === 'manual' || event.source_type === 'training_sheet';
+    event.source_type === 'manual' || event.source_type === 'training_sheet' || event.source_type === 'isport';
 
   if (!isCaptainUser(user) && !(isTraining && isAllowedTrainingSource)) {
     return json({
@@ -558,6 +674,236 @@ async function deleteTraining(id, env, headers) {
     db(env).prepare('DELETE FROM events WHERE id=?').bind(id)
   ]);
   return json({ ok: true }, 200, headers);
+}
+
+async function syncIsportReservations(request, env, user, headers) {
+  const body = await readJson(request);
+  const dates = Array.isArray(body?.dates)
+    ? [...new Set(body.dates.map(v => String(v || '').trim()).filter(Boolean))]
+    : [];
+  const lanes = Array.isArray(body?.lanes)
+    ? [...new Set(body.lanes.map(v => clean(v, 40)).filter(Boolean))]
+    : [];
+  const slots = Array.isArray(body?.slots) ? body.slots : [];
+
+  if (!dates.length || dates.length > 8 || !dates.every(isIsoDate)) {
+    return json({ error: 'Očekávám 1–8 platných datumů v dates.' }, 400, headers);
+  }
+  if (!lanes.length || lanes.length > 10) {
+    return json({ error: 'Chybí seznam drah.' }, 400, headers);
+  }
+  if (slots.length > 2500) {
+    return json({ error: 'Snapshot iSportu je příliš velký.' }, 400, headers);
+  }
+
+  const dateSet = new Set(dates);
+  const laneSet = new Set(lanes);
+  const cleanSlotsByKey = new Map();
+
+  for (const raw of slots) {
+    const date = String(raw?.date || '').trim();
+    const lane = clean(raw?.lane, 40);
+    const startTime = normalizeTime(raw?.startTime);
+    const endTime = normalizeTime(raw?.endTime);
+    const kind = raw?.kind === 'ours' ? 'ours' : 'busy';
+
+    if (!dateSet.has(date) || !lane || !laneSet.has(lane) || !startTime || !endTime) continue;
+    const startMin = minutesOfDay(startTime);
+    const endMin = minutesOfDay(endTime);
+    if (startMin === null || endMin === null || startMin >= endMin) continue;
+
+    const key = `${date}|${lane}|${startTime}|${endTime}`;
+    const current = cleanSlotsByKey.get(key);
+    // Pokud by se stejná buňka objevila dvakrát, naše rezervace má přednost.
+    if (!current || kind === 'ours') {
+      cleanSlotsByKey.set(key, { date, lane, startTime, endTime, kind });
+    }
+  }
+
+  const cleanSlots = [...cleanSlotsByKey.values()];
+  const database = db(env);
+
+  // Snapshot je autoritativní pro konkrétní dny: staré sloty těchto dnů nahradíme.
+  const deleteSlotStatements = dates.map(date =>
+    database.prepare('DELETE FROM isport_reservation_slots WHERE date=?').bind(date)
+  );
+  for (let i = 0; i < deleteSlotStatements.length; i += 50) {
+    await database.batch(deleteSlotStatements.slice(i, i + 50));
+  }
+
+  const dayStatements = dates.map(date => database.prepare(`
+    INSERT INTO isport_sync_days(date, lanes_json, synced_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(date) DO UPDATE SET
+      lanes_json=excluded.lanes_json,
+      synced_at=CURRENT_TIMESTAMP
+  `).bind(date, JSON.stringify(lanes)));
+  for (let i = 0; i < dayStatements.length; i += 50) {
+    await database.batch(dayStatements.slice(i, i + 50));
+  }
+
+  const slotStatements = cleanSlots.map(slot => database.prepare(`
+    INSERT INTO isport_reservation_slots(date,lane,start_time,end_time,kind,synced_at)
+    VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(date,lane,start_time,end_time) DO UPDATE SET
+      kind=excluded.kind,
+      synced_at=CURRENT_TIMESTAMP
+  `).bind(slot.date, slot.lane, slot.startTime, slot.endTime, slot.kind));
+  for (let i = 0; i < slotStatements.length; i += 50) {
+    await database.batch(slotStatements.slice(i, i + 50));
+  }
+
+  // Dříve synchronizované iSport tréninky v těchto dnech nejdřív skryjeme.
+  // Pokud jsou v aktuálním snapshotu znovu, níže je zase aktivujeme.
+  const placeholders = dates.map(() => '?').join(',');
+  await database.prepare(`
+    UPDATE isport_reservation_events
+    SET active=0, last_seen_at=CURRENT_TIMESTAMP
+    WHERE event_id IN (
+      SELECT id FROM events
+      WHERE source_type='isport' AND date IN (${placeholders})
+    )
+  `).bind(...dates).run();
+
+  const minDate = [...dates].sort()[0];
+  const maxDate = [...dates].sort().at(-1);
+  const existingResult = await database.prepare(`
+    SELECT id, source_type, date, payload_json, cancelled
+    FROM events
+    WHERE date>=? AND date<=?
+  `).bind(minDate, maxDate).all();
+
+  const existingTrainings = [];
+  for (const row of existingResult.results || []) {
+    let payload;
+    try { payload = JSON.parse(row.payload_json || '{}'); }
+    catch { continue; }
+    if (payload?.type !== 'training') continue;
+    existingTrainings.push({
+      id: String(row.id),
+      sourceType: String(row.source_type || ''),
+      date: String(row.date || payload.date || ''),
+      startTime: normalizeTime(payload.startTime),
+      endTime: normalizeTime(payload.endTime),
+      cancelled: Boolean(row.cancelled)
+    });
+  }
+
+  const ourGroups = new Map();
+  for (const slot of cleanSlots) {
+    if (slot.kind !== 'ours') continue;
+    const key = `${slot.date}|${slot.startTime}|${slot.endTime}`;
+    if (!ourGroups.has(key)) {
+      ourGroups.set(key, {
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        lanes: new Set()
+      });
+    }
+    ourGroups.get(key).lanes.add(slot.lane);
+  }
+
+  let activated = 0;
+  let skippedExisting = 0;
+  let skippedCancelled = 0;
+
+  for (const group of ourGroups.values()) {
+    const overlapsCancelled = existingTrainings.some(event =>
+      event.cancelled &&
+      event.date === group.date &&
+      event.startTime && event.endTime &&
+      intervalsOverlap(group.startTime, group.endTime, event.startTime, event.endTime)
+    );
+    if (overlapsCancelled) {
+      skippedCancelled++;
+      continue;
+    }
+
+    const alreadyRecorded = existingTrainings.some(event =>
+      !event.cancelled &&
+      event.sourceType !== 'isport' &&
+      event.date === group.date &&
+      event.startTime === group.startTime &&
+      event.endTime === group.endTime
+    );
+    if (alreadyRecorded) {
+      skippedExisting++;
+      continue;
+    }
+
+    const eventId = isportEventId(group.date, group.startTime, group.endTime);
+    const rink = [...group.lanes]
+      .map(lane => lane.replace(/^Dráha\s*/i, '').trim() || lane)
+      .sort((a, b) => a.localeCompare(b, 'cs'))
+      .join(', ');
+
+    const event = {
+      id: eventId,
+      type: 'training',
+      title: 'Trénink – rezervováno',
+      team: env.TEAM_NAME || 'CB BUTchers',
+      opponent: null,
+      date: group.date,
+      startTime: group.startTime,
+      endTime: group.endTime,
+      allDay: false,
+      location: 'Curling Brno',
+      rink: rink || null,
+      competition: null,
+      description: 'Rezervace synchronizovaná z iSportu.',
+      source: {
+        type: 'isport',
+        name: 'Curling Brno – rezervace',
+        url: 'https://curlingbrno.isportsystem.cz/'
+      },
+      editable: false,
+      attendanceEnabled: true,
+      syncedBy: user.id
+    };
+
+    // UPSERT nemění sloupec cancelled, takže ručně zrušený iSport trénink
+    // se tímto nikdy neobnoví.
+    await eventStatement(env, event).run();
+    await database.prepare(`
+      INSERT INTO isport_reservation_events(event_id,active,last_seen_at)
+      VALUES(?,1,CURRENT_TIMESTAMP)
+      ON CONFLICT(event_id) DO UPDATE SET
+        active=1,
+        last_seen_at=CURRENT_TIMESTAMP
+    `).bind(eventId).run();
+    activated++;
+  }
+
+  return json({
+    ok: true,
+    dates: dates.length,
+    lanes: lanes.length,
+    slots: cleanSlots.length,
+    ourReservations: ourGroups.size,
+    activated,
+    skippedExisting,
+    skippedCancelled
+  }, 200, headers);
+}
+
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function normalizeTime(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function isportEventId(date, startTime, endTime) {
+  return `isport-${date}-${startTime.replace(':','')}-${endTime.replace(':','')}`;
 }
 
 async function importEvents(request, env, headers) {
