@@ -28,7 +28,7 @@
       <details class="menu-dropdown">
         <summary class="menu-button">Odkazy</summary>
         <div class="menu-popover">
-          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
           <a class="menu-item" href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
@@ -46,6 +46,7 @@
           <button id="export-btn" type="button" class="menu-item">Export dat</button>
           <button id="change-pin-btn" type="button" class="menu-item hidden">Změna PINu</button>
           <button id="attendance-table-btn" type="button" class="menu-item">Tabulka účasti</button>
+          <button id="match-attendance-totals-btn" type="button" class="menu-item hidden">Souhrn účasti na zápasech</button>
         </div>
       </details>
     </nav>
@@ -233,7 +234,7 @@
       <section class="mobile-menu-section">
         <h3>Odkazy</h3>
         <div class="mobile-menu-grid">
-          <a href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
           <a href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
           <a href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
           <a href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
@@ -254,10 +255,21 @@
           <button id="mobile-export-btn" type="button" class="mobile-menu-item">Export dat</button>
           <button id="mobile-change-pin-btn" type="button" class="mobile-menu-item hidden">Změna PINu</button>
           <button id="mobile-attendance-table-btn" type="button" class="mobile-menu-item">Tabulka účasti</button>
+          <button id="mobile-match-attendance-totals-btn" type="button" class="mobile-menu-item hidden">Souhrn účasti na zápasech</button>
         </div>
       </section>
     </div>
   </div>
+
+  <dialog id="match-attendance-totals-dialog" class="modal attendance-overview-modal">
+    <form method="dialog" class="modal-card">
+      <button class="modal-close" value="cancel" aria-label="Zavřít">×</button>
+      <p class="eyebrow">Pouze kapitán</p>
+      <h2>Souhrn účasti na zápasech</h2>
+      <p class="helper">Počítá se pouze potvrzená účast <strong>Ano</strong>. Tréninky se nezapočítávají.</p>
+      <div id="match-attendance-totals" class="attendance-overview"></div>
+    </form>
+  </dialog>
 
   <dialog id="attendance-table-dialog" class="modal attendance-overview-modal">
     <form method="dialog" class="modal-card">
@@ -270,6 +282,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20261022-1600" defer></script>
+  <script src="app.js?v=20261026-0905" defer></script>
 </body>
 </html>

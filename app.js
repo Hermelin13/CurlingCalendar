@@ -720,6 +720,114 @@ function attendanceStatusLabel(status) {
   })[status || 'unknown'] || '—';
 }
 
+function matchAttendanceCategory(event) {
+  const source = sourceType(event);
+  const competition = String(event?.competition || '').toLocaleLowerCase('cs');
+
+  if (source === 'excel' || competition.includes('pohár')) return 'cup';
+  if (
+    source === 'pdf' ||
+    competition.includes('diviz') ||
+    competition.includes('mčr')
+  ) return 'division';
+
+  return 'other';
+}
+
+function renderMatchAttendanceTotals() {
+  const host = $('#match-attendance-totals');
+  if (!host) return;
+
+  if (!state.user?.isCaptain) {
+    host.innerHTML = '<p class="empty">Tento přehled je dostupný pouze Adamovi.</p>';
+    return;
+  }
+
+  const users = [...state.users].sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'cs')
+  );
+
+  const totals = new Map(
+    users.map(user => [
+      String(user.id),
+      { total: 0, cup: 0, division: 0 }
+    ])
+  );
+
+  const matches = state.events.filter(event =>
+    !event?.cancelled && isMatch(event)
+  );
+
+  for (const event of matches) {
+    const category = matchAttendanceCategory(event);
+    const rows = state.attendanceSummary[event.id] || [];
+
+    for (const row of rows) {
+      if (row.status !== 'yes') continue;
+
+      const userId = String(row.userId || row.id || '');
+      const counts = totals.get(userId);
+      if (!counts) continue;
+
+      counts.total += 1;
+      if (category === 'cup') counts.cup += 1;
+      if (category === 'division') counts.division += 1;
+    }
+  }
+
+  const team = { total: 0, cup: 0, division: 0 };
+
+  const bodyRows = users.map(user => {
+    const counts = totals.get(String(user.id)) || { total: 0, cup: 0, division: 0 };
+
+    team.total += counts.total;
+    team.cup += counts.cup;
+    team.division += counts.division;
+
+    return `<tr>
+      <th scope="row"><strong>${escapeHtml(user.name)}</strong></th>
+      <td><strong>${counts.total}</strong></td>
+      <td>${counts.cup}</td>
+      <td>${counts.division}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="attendance-table-scroll">
+      <table class="attendance-overview-table">
+        <thead>
+          <tr>
+            <th scope="col">Hráč</th>
+            <th scope="col">Celkem</th>
+            <th scope="col">Pohár</th>
+            <th scope="col">Divize</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bodyRows}
+          <tr>
+            <th scope="row"><strong>Tým celkem</strong></th>
+            <td><strong>${team.total}</strong></td>
+            <td><strong>${team.cup}</strong></td>
+            <td><strong>${team.division}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="helper">Zápasů v kalendáři: ${matches.length}. „Celkem“ zahrnuje všechny zápasy; Pohár a Divize jsou jejich samostatné podskupiny.</p>
+  `;
+}
+
+function openMatchAttendanceTotals() {
+  if (!state.user?.isCaptain) {
+    showToast('Tento přehled může zobrazit jen Adam.');
+    return;
+  }
+
+  renderMatchAttendanceTotals();
+  $('#match-attendance-totals-dialog').showModal();
+}
+
 function renderAttendanceOverview() {
   const host = $('#attendance-overview');
   if (!host) return;
@@ -828,6 +936,10 @@ function updateLoginUI() {
   $('#mobile-logout-btn')?.classList.toggle('hidden', !loggedIn);
   $('#mobile-change-pin-btn')?.classList.toggle('hidden', !loggedIn);
   $('#mobile-add-training-btn')?.classList.toggle('hidden', !state.user?.canManageTrainings);
+
+  const captainOnly = !state.user?.isCaptain;
+  $('#match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
+  $('#mobile-match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
 }
 
 function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář'})[type] || type; }
@@ -863,6 +975,7 @@ function wireUI() {
   const trainingDialog = $('#training-dialog');
   const trainingForm = $('#training-form');
   const attendanceTableBtn = $('#attendance-table-btn');
+  const matchAttendanceTotalsBtn = $('#match-attendance-totals-btn');
 
   const mobileMenuDialog = $('#mobile-menu-dialog');
   const mobileMenuBtn = $('#mobile-menu-btn');
@@ -873,6 +986,7 @@ function wireUI() {
   const mobileExportBtn = $('#mobile-export-btn');
   const mobileChangePinBtn = $('#mobile-change-pin-btn');
   const mobileAttendanceTableBtn = $('#mobile-attendance-table-btn');
+  const mobileMatchAttendanceTotalsBtn = $('#mobile-match-attendance-totals-btn');
 
   const resultSaveBtn = $('#result-save-btn');
   const resultDeleteBtn = $('#result-delete-btn');
@@ -975,6 +1089,11 @@ function wireUI() {
     openAttendanceOverview();
   };
 
+  matchAttendanceTotalsBtn.onclick = () => {
+    closeTopMenus();
+    openMatchAttendanceTotals();
+  };
+
   const openMobileMenu = () => {
     mobileMenuDialog.classList.add('is-open');
     mobileMenuDialog.setAttribute('aria-hidden', 'false');
@@ -1028,6 +1147,11 @@ function wireUI() {
   mobileAttendanceTableBtn.onclick = () => {
     closeMobileMenu();
     openAttendanceOverview();
+  };
+
+  mobileMatchAttendanceTotalsBtn.onclick = () => {
+    closeMobileMenu();
+    openMatchAttendanceTotals();
   };
 
   mobileMenuLinks.forEach(link => {
