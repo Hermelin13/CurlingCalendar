@@ -8,9 +8,7 @@ import json
 import os
 import re
 from datetime import date, datetime
-from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 import pdfplumber
@@ -21,7 +19,7 @@ from icalendar import Calendar
 ROOT = Path(__file__).resolve().parents[1]
 DATA_FILE = ROOT / "data" / "events.json"
 CONFIG_FILE = ROOT / "config" / "sources.json"
-TEAM = "CB Butchers"
+TEAM = "CB BUTchers"
 PRAGUE = ZoneInfo("Europe/Prague")
 
 
@@ -59,82 +57,241 @@ def base_event(*, event_id, event_type, title, date_str, start_time=None, end_ti
 
 def parse_google_sheet(cfg: dict) -> list[dict]:
     """
-    Načte konkrétní list Google Sheets přímo jako CSV.
-    Není potřeba editace dokumentu ani Google API credentials.
-    Dokument musí být dostupný přes odkaz tak, aby ho GitHub Actions mohl stáhnout.
+    Načte Brněnský pohár z Google Sheets.
+
+    DŮLEŽITÉ:
+    - NEHLEDÁ CB BUTchers po celém listu.
+    - Ignoruje tabulky pořadí / týmů napravo.
+    - Nejdřív najde pouze sloupec/sloupce, kde jsou skutečné časy zápasů
+      typu "A - 18:00", "B - 20:00", ...
+    - Týmy čte pouze z buňky hned vedle času a z následujícího řádku
+      ve stejném sloupci týmů.
     """
-    url = cfg["csvUrl"]
-    response = requests.get(url, timeout=45, allow_redirects=True)
-    response.raise_for_status()
+    urls = [cfg.get("csvUrl"), cfg.get("fallbackCsvUrl")]
+    urls = [u for u in urls if u]
 
-    content_type = (response.headers.get("content-type") or "").lower()
-    text = response.text
+    rows = None
+    last_error = None
 
-    # Když Google místo CSV vrátí přihlašovací HTML, raději import ukončíme
-    # a zachováme poslední data z events.json.
-    if "text/html" in content_type or "<html" in text[:500].lower():
-        raise RuntimeError(
-            "Google Sheet není pro GitHub Actions veřejně čitelný. "
-            "Nastav sdílení na „Kdokoli s odkazem – prohlížející“."
-        )
-
-    rows = list(csv.reader(io.StringIO(text)))
-    current_date = None
-    out = []
-
-    def cell(row, index):
-        if index >= len(row):
-            return ""
-        return str(row[index] or "").strip()
-
-    def parse_header_date(value):
-        text = str(value or "").strip()
-        m = re.search(r"(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})", text)
-        if m:
-            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    for url in urls:
         try:
-            return date_parser.parse(text, dayfirst=True).date()
+            response = requests.get(url, timeout=45, allow_redirects=True)
+            response.raise_for_status()
+
+            content_type = (response.headers.get("content-type") or "").lower()
+
+            # Google CSV je UTF-8. requests někdy odhadne ISO-8859-1,
+            # což způsobí mojibake typu "Prasklej hrnÃ­Äek".
+            text = response.content.decode("utf-8-sig")
+
+            if "text/html" in content_type or "<html" in text[:500].lower():
+                raise RuntimeError(
+                    "Google místo CSV vrátil HTML. Dokument nejspíš není "
+                    "dostupný bez přihlášení."
+                )
+
+            candidate_rows = list(csv.reader(io.StringIO(text)))
+            if candidate_rows:
+                rows = candidate_rows
+                print(
+                    f"Google CSV: {len(rows)} řádků, "
+                    f"max {max((len(r) for r in rows), default=0)} sloupců"
+                )
+                break
+        except Exception as exc:
+            last_error = exc
+
+    if rows is None:
+        raise RuntimeError(f"Google Sheet se nepodařilo načíst: {last_error}")
+
+    def cell(row_index: int, col_index: int) -> str:
+        if row_index < 0 or row_index >= len(rows):
+            return ""
+        if col_index < 0 or col_index >= len(rows[row_index]):
+            return ""
+        return str(rows[row_index][col_index] or "").strip()
+
+    def parse_date_value(value: str):
+        text = str(value or "").strip()
+        if not text:
+            return None
+
+        m = re.search(r"(?<!\d)(\d{1,2})\.\s*(\d{1,2})\.?\s*(\d{4})(?!\d)", text)
+        if m:
+            try:
+                return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                return None
+
+        m = re.search(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)", text)
+        if m:
+            try:
+                return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                return None
+
+        try:
+            parsed = date_parser.parse(text, dayfirst=True, fuzzy=True)
+            return parsed.date()
         except Exception:
             return None
 
-    row = 0
-    while row < len(rows):
-        col_a = cell(rows[row], 0)
-        col_b = cell(rows[row], 1)
+    def date_from_header_row(row_index: int):
+        """
+        Datum hledej v CELÉM hlavičkovém řádku "Dráha - Čas".
+        Google CSV může kvůli formátování/merged buňkám datum posunout
+        jinam než přesně do sousedního sloupce.
+        """
+        if row_index < 0 or row_index >= len(rows):
+            return None
 
-        if norm(col_a) == norm("Dráha - Čas"):
-            current_date = parse_header_date(col_b)
-            row += 1
-            continue
+        for value in rows[row_index]:
+            parsed = parse_date_value(str(value or ""))
+            if parsed:
+                return parsed
+        return None
 
-        if re.match(r"^[AB]\s*-\s*\d{1,2}:\d{2}$", col_a, re.I):
-            team1 = col_b
-            team2 = cell(rows[row + 1], 1) if row + 1 < len(rows) else ""
+    # Skutečný řádek zápasu. Tabulky pořadí tento formát nemají.
+    time_re = re.compile(
+        r"^\s*(?:dráha\s*)?([A-ZÁ-Ž]|\d+)\s*[-–—]\s*"
+        r"(\d{1,2})[:.](\d{2})\s*$",
+        re.I,
+    )
 
-            if current_date and (norm(team1) == norm(TEAM) or norm(team2) == norm(TEAM)):
-                rink, start = [x.strip() for x in col_a.split("-", 1)]
-                opponent = team2 if norm(team1) == norm(TEAM) else team1
-                d = current_date.isoformat()
+    # 1) Najdi POUZE sloupce, ve kterých jsou reálné časy zápasů.
+    # V původním rozpisu je to sloupec A. Tabulky pořadí napravo se tím
+    # automaticky úplně ignorují.
+    time_columns = set()
+    time_rows_count = 0
 
-                out.append(base_event(
-                    event_id=stable_id("excel", d, start, rink.upper(), opponent),
-                    event_type="match",
-                    title=f"{TEAM} vs {opponent}",
-                    date_str=d,
-                    start_time=start,
-                    location=cfg.get("location", "Curling Brno"),
-                    rink=rink.upper(),
-                    competition=cfg.get("competition", "Brněnský pohár"),
-                    source_type="excel",
-                    source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
-                    opponent=opponent,
-                ))
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            text = str(value or "").strip()
+            if time_re.match(text):
+                time_columns.add(c)
+                time_rows_count += 1
 
-            row += 2
-            continue
+    if not time_columns:
+        # Tohle není legitimní "0 zápasů", ale rozbitý/nečekaný export.
+        # Vyhodíme chybu, aby main() zachoval poslední známá data.
+        raise RuntimeError(
+            "V Google Sheetu jsem nenašel žádný sloupec s časy zápasů "
+            "(např. 'A - 18:00'). Staré zápasy proto nemažu."
+        )
 
-        row += 1
+    print(
+        "Google CSV: sloupce s časy zápasů = "
+        + ", ".join(str(c + 1) for c in sorted(time_columns))
+        + f"; časových řádků = {time_rows_count}"
+    )
 
+    out = []
+    seen = set()
+    current_dates = {c: None for c in time_columns}
+
+    # 2) Procházej jen sloupce s časy zápasů.
+    for r in range(len(rows)):
+        for time_col in sorted(time_columns):
+            value = cell(r, time_col)
+
+            # Hlavička bloku: "Dráha - Čas" | datum
+            if norm(value) == norm("Dráha - Čas"):
+                # Datum nemusí být po CSV exportu přesně v sousední buňce.
+                # Proto ho hledáme jen v tomto hlavičkovém řádku, ale napříč sloupci.
+                parsed_date = date_from_header_row(r)
+                if parsed_date:
+                    current_dates[time_col] = parsed_date
+                    print(
+                        f"Google CSV: řádek {r + 1}, datum bloku "
+                        f"{parsed_date.isoformat()}"
+                    )
+                else:
+                    print(
+                        f"VAROVÁNÍ: řádek {r + 1} je hlavička rozpisu, "
+                        f"ale datum v ní nebylo rozpoznáno: {rows[r][:12]}"
+                    )
+                continue
+
+            m = time_re.match(value)
+            if not m:
+                continue
+
+            rink = m.group(1).upper()
+            start = f"{int(m.group(2)):02d}:{m.group(3)}"
+
+            # TÝMY BEREME POUZE Z ROZPISU:
+            # řádek s časem -> první tým
+            # následující řádek -> druhý tým
+            team_col = time_col + 1
+            team1 = cell(r, team_col)
+            team2 = cell(r + 1, team_col)
+
+            if norm(team1) != norm(TEAM) and norm(team2) != norm(TEAM):
+                continue
+
+            opponent = team2 if norm(team1) == norm(TEAM) else team1
+            opponent = opponent.strip()
+
+            if not opponent or norm(opponent) == norm(TEAM):
+                print(
+                    f"VAROVÁNÍ: řádek {r + 1}: našel jsem {TEAM}, "
+                    "ale chybí soupeř."
+                )
+                continue
+
+            match_date = current_dates.get(time_col)
+
+            # Fallback: pokud Google kvůli formátování hlavičku posunul,
+            # hledej datum jen zpětně V TOM SAMÉM rozpisovém páru sloupců.
+            if not match_date:
+                for rr in range(r, max(-1, r - 30), -1):
+                    if norm(cell(rr, time_col)) == norm("Dráha - Čas"):
+                        match_date = date_from_header_row(rr)
+                        if match_date:
+                            current_dates[time_col] = match_date
+                            break
+
+            if not match_date:
+                print(
+                    f"VAROVÁNÍ: řádek {r + 1}: zápas {TEAM} vs {opponent} "
+                    "nemá rozpoznané datum, přeskakuji."
+                )
+                continue
+
+            date_str = match_date.isoformat()
+            dedupe_key = (date_str, start, rink, norm(opponent))
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+
+            out.append(base_event(
+                event_id=stable_id("excel", date_str, start, rink, opponent),
+                event_type="match",
+                title=f"{TEAM} vs {opponent}",
+                date_str=date_str,
+                start_time=start,
+                location=cfg.get("location", "Curling Brno"),
+                rink=rink,
+                competition=cfg.get("competition", "Brněnský pohár"),
+                source_type="excel",  # kvůli stávajícímu filtru a D1 importu
+                source_name=cfg.get("name", "Brněnský pohár – Google Sheets"),
+                opponent=opponent,
+            ))
+
+    out.sort(key=lambda e: (
+        e["date"],
+        e.get("startTime") or "",
+        e.get("rink") or "",
+    ))
+
+    print(
+        f"Google CSV: z rozpisových sloupců nalezeno "
+        f"{len(out)} zápasů týmu {TEAM}"
+    )
+
+    # 0 zápasů je zde legitimní jen tehdy, když jsme opravdu našli
+    # strukturu rozpisu s časovými řádky. To umožní zrušené zápasy
+    # odstranit z D1, ale při rozbitém CSV se stará data zachovají.
     return out
 
 def _split_pdf_columns(words: list[dict], anchors: list[float]) -> dict[int, str]:
@@ -148,143 +305,9 @@ def _split_pdf_columns(words: list[dict], anchors: list[float]) -> dict[int, str
     return {k: " ".join(v).strip() for k, v in cols.items()}
 
 
-class _LinkCollector(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.links: list[dict] = []
-        self._href: str | None = None
-        self._text: list[str] = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag.lower() != "a":
-            return
-        self._href = dict(attrs).get("href")
-        self._text = []
-
-    def handle_data(self, data):
-        if self._href is not None:
-            self._text.append(data)
-
-    def handle_endtag(self, tag):
-        if tag.lower() != "a" or self._href is None:
-            return
-        self.links.append({
-            "href": self._href,
-            "text": re.sub(r"\s+", " ", " ".join(self._text)).strip(),
-        })
-        self._href = None
-        self._text = []
-
-
-def _looks_like_pdf_url(url: str) -> bool:
-    return urlsplit(url).path.lower().endswith(".pdf")
-
-
-def discover_division_pdf_url(cfg: dict) -> str:
-    """
-    Najde na oficiální stránce ČSC odkaz „Rozpis divize MČR mužů a žen“.
-    Díky tomu nemusíme mít v repozitáři natvrdo uložený název PDF souboru.
-    """
-    page_url = cfg.get(
-        "pageUrl",
-        "https://www.curling.cz/souteze-csc/mcr-muzu-a-zen/",
-    )
-    expected_text = norm(cfg.get("linkText", "Rozpis divize MČR mužů a žen"))
-
-    response = requests.get(
-        page_url,
-        timeout=45,
-        allow_redirects=True,
-        headers={
-            "User-Agent": "CB-Butchers-calendar/1.0 (+GitHub Actions; public schedule import)",
-            "Cache-Control": "no-cache",
-        },
-    )
-    response.raise_for_status()
-
-    collector = _LinkCollector()
-    collector.feed(response.text)
-
-    candidates = []
-    for link in collector.links:
-        href = str(link.get("href") or "").strip()
-        text = str(link.get("text") or "").strip()
-        if not href:
-            continue
-
-        absolute = urljoin(response.url, href)
-        text_n = norm(text)
-        href_n = absolute.casefold()
-
-        score = 0
-        if expected_text and expected_text in text_n:
-            score += 100
-        if "rozpis" in text_n:
-            score += 20
-        if "divize" in text_n:
-            score += 30
-        if "mčr" in text_n or "mcr" in text_n:
-            score += 5
-        if "diviz" in href_n:
-            score += 20
-        if _looks_like_pdf_url(absolute):
-            score += 10
-
-        # Nechceme TMD, pořadí ani pravidla, i kdyby obsahovala slovo divize.
-        if any(bad in text_n or bad in href_n for bad in (
-            "team meeting", "tmd", "pořad", "porad", "herni_rad", "herní řád"
-        )):
-            score -= 100
-
-        if score > 0:
-            candidates.append((score, absolute, text))
-
-    if not candidates:
-        raise RuntimeError(
-            "Na stránce ČSC jsem nenašel odkaz na PDF rozpis divize. "
-            f"Stránka: {page_url}"
-        )
-
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    best_score, best_url, best_text = candidates[0]
-    if best_score < 30:
-        raise RuntimeError(
-            "Na stránce ČSC jsem našel jen nejisté PDF odkazy; "
-            "staré zápasy proto raději zachovávám."
-        )
-
-    print(f"PDF divize: nalezen odkaz '{best_text or best_url}'")
-    return best_url
-
-
-def download_division_pdf(cfg: dict) -> tuple[bytes, str]:
-    pdf_url = discover_division_pdf_url(cfg)
-    response = requests.get(
-        pdf_url,
-        timeout=60,
-        allow_redirects=True,
-        headers={
-            "User-Agent": "CB-Butchers-calendar/1.0 (+GitHub Actions; public schedule import)",
-            "Cache-Control": "no-cache",
-        },
-    )
-    response.raise_for_status()
-
-    content = response.content
-    content_type = (response.headers.get("content-type") or "").lower()
-    if not content.startswith(b"%PDF-") and "application/pdf" not in content_type:
-        raise RuntimeError(
-            f"Odkaz na rozpis nevrátil PDF (Content-Type: {content_type or 'neuveden'})."
-        )
-
-    final_url = response.url
-    print(f"PDF divize: staženo {len(content)} B z {final_url}")
-    return content, final_url
-
-
-def parse_pdf_bytes(pdf_bytes: bytes, cfg: dict, source_url: str) -> list[dict]:
+def parse_pdf(path: Path, cfg: dict) -> list[dict]:
     out = []
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+    with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
             lines = page.extract_text_lines()
             words = page.extract_words()
@@ -351,31 +374,20 @@ def parse_pdf_bytes(pdf_bytes: bytes, cfg: dict, source_url: str) -> list[dict]:
                         competition=cfg.get("competition", "MČR divize"),
                         description=(
                             f"Trénink / rozehra: {warmup_start}–{start}.\n"
-                            f"Zdroj: online PDF ČSC, strana {page_no}."
+                            f"Zdroj: PDF, strana {page_no}."
                         ),
                         source_type="pdf",
-                        source_name=cfg.get("name", "MČR divize 2026/27"),
+                        source_name="MČR divize 2026/27",
                         opponent=opponent,
                     )
+                    # Strukturovaně uložíme čas rozehry i pro případné další
+                    # zobrazení ve frontendu. ID zápasu se nemění, takže D1
+                    # pouze aktualizuje payload a docházka zůstane zachovaná.
                     event["warmupStartTime"] = warmup_start
                     event["warmupEndTime"] = start
-                    event["source"]["url"] = source_url
                     out.append(event)
-
-    # Pokud se struktura PDF někdy zásadně změní, nechceme omylem
-    # vymazat všechny dosavadní divizní zápasy z D1.
-    if not out:
-        raise RuntimeError(
-            f"V online PDF nebyl nalezen žádný zápas týmu {TEAM}. "
-            "Zachovávám proto poslední známá data."
-        )
-
     return out
 
-
-def parse_online_division_pdf(cfg: dict) -> tuple[list[dict], str]:
-    pdf_bytes, source_url = download_division_pdf(cfg)
-    return parse_pdf_bytes(pdf_bytes, cfg, source_url), source_url
 
 def _dt_parts(value):
     if isinstance(value, datetime):
@@ -448,10 +460,10 @@ def main():
         excel_events = source_slice(existing, "excel")
 
     try:
-        pdf_events, pdf_url = parse_online_division_pdf(cfg["pdf"])
-        print(f"Online PDF: {len(pdf_events)} zápasů ({pdf_url})")
+        pdf_events = parse_pdf(ROOT / cfg["pdf"]["path"], cfg["pdf"])
+        print(f"PDF: {len(pdf_events)} zápasů")
     except Exception as exc:
-        print(f"VAROVÁNÍ: online PDF import selhal, zachovávám poslední data: {exc}")
+        print(f"VAROVÁNÍ: PDF import selhal, zachovávám poslední data: {exc}")
         pdf_events = source_slice(existing, "pdf")
 
     ical_url = os.getenv(cfg.get("ical", {}).get("urlFromEnvironment", "ICAL_URL"), "").strip()
