@@ -662,10 +662,10 @@ function exportCalendar() {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//CB Butchers//Team Calendar//CS',
+    'PRODID:-//CB BUTchers//Team Calendar//CS',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:CB Butchers',
+    'X-WR-CALNAME:CB BUTchers',
     'X-WR-TIMEZONE:Europe/Prague'
   ];
   for (const e of events) {
@@ -950,7 +950,7 @@ function updateLoginUI() {
   $('#mobile-match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
 }
 
-function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'iCal', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář', isport:'Rezervace iSport'})[type] || type; }
+function sourceLabel(type) { return ({excel:'Brněnský pohár', pdf:'MČR / divize', ical:'EOS', manual:'Ruční trénink', training_sheet:'Tréninkový kalendář', isport:'Rezervace iSport'})[type] || type; }
 function escapeHtml(value='') { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
 function showToast(text) { const t=$('#toast'); t.textContent=text; t.classList.add('show'); clearTimeout(showToast.timer); showToast.timer=setTimeout(()=>t.classList.remove('show'),3000); }
 function renderAll() { renderCalendar(); renderUpcoming(); }
@@ -1218,7 +1218,7 @@ function wireUI() {
 
 async function boot() {
   state.config = await loadJson('config/config.json');
-  document.title = state.config.siteTitle || document.title; $('#site-title').textContent = state.config.headerTitle || 'Kalendář týmu';
+  document.title=state.config.siteTitle || document.title; $('#site-title').textContent=state.config.siteTitle || 'Kalendář týmu';
   wireUI();
   await Promise.all([loadUsers(), restoreLogin()]);
   state.events = (await loadEvents()).filter(event => !event?.cancelled);

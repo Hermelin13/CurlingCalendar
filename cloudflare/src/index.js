@@ -572,7 +572,7 @@ async function getStats(env, headers) {
 }
 
 function sourceStatsLabel(type) {
-  return ({ excel: 'Brněnský pohár', pdf: 'MČR / divize', ical: 'iCal', manual: 'Ruční' })[type] || 'Ostatní';
+  return ({ excel: 'Brněnský pohár', pdf: 'MČR / divize', ical: 'EOS', manual: 'Ruční' })[type] || 'Ostatní';
 }
 
 async function getAttendance(url, env, headers) {
@@ -668,7 +668,7 @@ async function addTraining(request, env, user, headers) {
     id,
     type: 'training',
     title: String(body.title || 'Trénink').slice(0,120),
-    team: env.TEAM_NAME || 'CB Butchers',
+    team: env.TEAM_NAME || 'CB BUTchers',
     opponent: null,
     date: body.date,
     startTime: body.startTime,
@@ -864,7 +864,7 @@ async function syncIsportReservations(request, env, user, headers) {
       id: eventId,
       type: 'training',
       title: 'Trénink – rezervováno',
-      team: env.TEAM_NAME || 'CB Butchers',
+      team: env.TEAM_NAME || 'CB BUTchers',
       opponent: null,
       date: group.date,
       startTime: group.startTime,
