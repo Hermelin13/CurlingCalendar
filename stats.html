@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark" />
   <title>CB Butchers – statistiky</title>
   <link rel="stylesheet" href="styles.css?v=20261104-brand1" />
-  <link rel="stylesheet" href="stats.css?v=20261104-brand1" />
+  <link rel="stylesheet" href="stats.css?v=20261104-desktop3" />
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,10 @@
   </header>
 
   <main class="stats-layout">
+    <section class="stats-mobile-title" aria-hidden="true">
+      <p class="eyebrow">CB Butchers</p>
+      <h1>Statistiky zápasů</h1>
+    </section>
     <section id="summary-cards" class="stats-cards" aria-live="polite"></section>
 
     <section class="panel stats-panel">
@@ -44,7 +48,7 @@
       </div>
       <div class="table-wrap">
         <table class="stats-table">
-          <thead><tr><th>Soutěž</th><th>Z</th><th>V</th><th>R</th><th>P</th><th>Skóre</th><th>+/-</th><th>Úspěšnost</th></tr></thead>
+          <thead><tr><th>Soutěž</th><th>Pořadí</th><th>Z</th><th>V</th><th>R</th><th>P</th><th>Skóre</th><th>+/-</th><th>Úspěšnost</th><th>Výhoda LSD</th></tr></thead>
           <tbody id="competition-body"></tbody>
         </table>
       </div>
@@ -68,6 +72,6 @@
     <p id="stats-error" class="error stats-error"></p>
   </main>
 
-  <script src="stats.js" defer></script>
+  <script src="stats.js?v=20261104-desktop3" defer></script>
 </body>
 </html>

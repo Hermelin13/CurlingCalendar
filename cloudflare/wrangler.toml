@@ -6,6 +6,8 @@ compatibility_flags = ["global_fetch_strictly_public"]
 [vars]
 TEAM_NAME = "CB Butchers"
 ALLOWED_ORIGINS = "http://localhost:3000,http://10.0.1.16:3000,https://curlingcalendar.adamdaliborj.workers.dev,https://curlingbrno.isportsystem.cz"
+CUP_STANDINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/export?format=csv&gid=116203339"
+DIVISION_STANDINGS_URL = "https://vysledky.curling.cz/standings/default?seasonId=6&leagueId=351"
 
 [[d1_databases]]
 binding = "cb_butchers_calendar"

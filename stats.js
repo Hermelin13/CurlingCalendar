@@ -46,6 +46,7 @@ function render(data) {
   $('#competition-body').innerHTML = (data.competitions || []).map(c => `
     <tr>
       <td data-label="Soutěž"><strong>${escapeHtml(c.competition)}</strong></td>
+      <td data-label="Pořadí"><strong class="standing-position">${Number.isInteger(c.position) ? `${c.position}.` : '—'}</strong></td>
       <td data-label="Zápasy">${c.played}</td>
       <td data-label="Výhry">${c.wins}</td>
       <td data-label="Remízy">${c.draws}</td>
@@ -53,8 +54,8 @@ function render(data) {
       <td data-label="Skóre">${c.pointsFor}:${c.pointsAgainst}</td>
       <td data-label="+/-">${c.difference > 0 ? '+' : ''}${c.difference}</td>
       <td data-label="Úspěšnost">${c.winPct} %</td>
-      <td data-label="LSD výhoda">${c.lsdAdvantages ?? 0}/${c.lsdKnown ?? 0}</td>
-    </tr>`).join('') || '<tr><td colspan="9" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
+      <td data-label="Výhoda LSD">${c.lsdAdvantages ?? 0}/${c.lsdKnown ?? 0}</td>
+    </tr>`).join('') || '<tr><td colspan="10" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
 
   $('#matches-body').innerHTML = (data.matches || []).map(m => `
     <tr class="match-row">
@@ -66,17 +67,37 @@ function render(data) {
     </tr>`).join('') || '<tr><td colspan="5" class="empty">Zatím nejsou zadané žádné výsledky.</td></tr>';
 }
 
+async function fetchStats(base) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${base}/api/stats?t=${Date.now()}`, { cache:'no-store' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `API ${res.status}`);
+      return body;
+    } catch (err) {
+      lastError = err;
+      if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 350));
+    }
+  }
+
+  throw lastError || new Error('API není dostupné.');
+}
+
 async function boot() {
   try {
     const config = await loadJson('config/config.json');
-    const base = String(config.apiBase || '').replace(/\/$/, '');
-    if (!base) throw new Error('Chybí apiBase v config/config.json.');
-    const res = await fetch(`${base}/api/stats`, { cache:'no-store' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `API ${res.status}`);
+    const base = String(
+      config.apiBase || 'https://cb-butchers-api.adamdaliborj.workers.dev'
+    ).replace(/\/$/, '');
+
+    const body = await fetchStats(base);
     render(body);
+    $('#stats-error').textContent = '';
   } catch (err) {
-    $('#stats-error').textContent = `Statistiky se nepodařilo načíst: ${err.message}`;
+    $('#stats-error').textContent =
+      `Statistiky se nepodařilo načíst: ${err?.message || 'neznámá chyba'}`;
   }
 }
 

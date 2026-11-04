@@ -1,6 +1,12 @@
 const encoder = new TextEncoder();
 const importedSources = new Set(['excel', 'pdf', 'ical']);
 
+const DEFAULT_CUP_STANDINGS_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/export?format=csv&gid=116203339';
+const DEFAULT_DIVISION_STANDINGS_URL =
+  'https://vysledky.curling.cz/standings/default?seasonId=6&leagueId=351';
+
+
 export default {
   async fetch(request, env) {
     try {
@@ -106,7 +112,8 @@ export default {
 
 function corsHeaders(origin, env) {
   const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-  const ok = !origin || allowed.includes('*') || allowed.includes(origin);
+  const localDev = Boolean(origin) && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+  const ok = !origin || allowed.includes('*') || allowed.includes(origin) || localDev;
   const headers = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -458,6 +465,182 @@ async function deleteResult(url, env, headers) {
   return json({ ok: true }, 200, headers);
 }
 
+
+function standingsKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&amp;/g, 'and')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function parseStandingNumber(value) {
+  const match = String(value || '').match(/\d+/);
+  if (!match) return null;
+  const number = Number(match[0]);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+
+  for (let i = 0; i < String(text || '').length; i++) {
+    const ch = text[i];
+
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      quoted = true;
+    } else if (ch === ',') {
+      row.push(field);
+      field = '';
+    } else if (ch === '\n') {
+      row.push(field.replace(/\r$/, ''));
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += ch;
+    }
+  }
+
+  row.push(field.replace(/\r$/, ''));
+  if (row.length > 1 || row[0]) rows.push(row);
+  return rows;
+}
+
+function findCupStandingPosition(csvText, teamName) {
+  const teamKey = standingsKey(teamName);
+  const rows = parseCsvRows(csvText);
+
+  // Brněnský pohár: current sorted standings are in G:H,
+  // with the mirrored/source table in M:N.
+  const pairs = [[6, 7], [12, 13]];
+
+  for (const [rankIndex, teamIndex] of pairs) {
+    for (const row of rows) {
+      if (standingsKey(row[teamIndex]) !== teamKey) continue;
+      const position = parseStandingNumber(row[rankIndex]);
+      if (position) return position;
+    }
+  }
+
+  return null;
+}
+
+function decodeBasicHtml(value) {
+  return String(value || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findDivisionStandingPosition(html, teamName) {
+  const teamKey = standingsKey(teamName);
+  const rowMatches = String(html || '').matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi);
+
+  for (const rowMatch of rowMatches) {
+    const rowHtml = rowMatch[1];
+    const cells = [...rowHtml.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+      .map(match => decodeBasicHtml(match[1]));
+
+    if (cells.length < 2) continue;
+
+    const teamFound = cells.some(cell => standingsKey(cell) === teamKey);
+    if (!teamFound) continue;
+
+    const position = parseStandingNumber(cells[0]);
+    if (position) return position;
+  }
+
+  return null;
+}
+
+async function fetchStandingsText(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6500);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'text/html,text/csv,text/plain;q=0.9,*/*;q=0.8'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getCompetitionPositions(env, { needCup, needDivision }) {
+  const teamName = env.TEAM_NAME || 'CB Butchers';
+
+  const cupPromise = needCup
+    ? fetchStandingsText(env.CUP_STANDINGS_CSV_URL || DEFAULT_CUP_STANDINGS_CSV_URL)
+        .then(text => findCupStandingPosition(text, teamName))
+        .catch(error => {
+          console.warn('Brněnský pohár standings unavailable:', error);
+          return null;
+        })
+    : Promise.resolve(null);
+
+  const divisionPromise = needDivision
+    ? fetchStandingsText(env.DIVISION_STANDINGS_URL || DEFAULT_DIVISION_STANDINGS_URL)
+        .then(text => findDivisionStandingPosition(text, teamName))
+        .catch(error => {
+          console.warn('Divize standings unavailable:', error);
+          return null;
+        })
+    : Promise.resolve(null);
+
+  const [cup, division] = await Promise.all([cupPromise, divisionPromise]);
+  return { cup, division };
+}
+
+function standingForCompetition(competition, sourceType, positions) {
+  const key = standingsKey(competition);
+
+  if (sourceType === 'excel' || key.includes('brnenskypohar')) {
+    return positions.cup;
+  }
+
+  if (sourceType === 'pdf' || key.includes('diviz')) {
+    return positions.division;
+  }
+
+  return null;
+}
+
 async function getStats(env, headers) {
   const { results } = await db(env).prepare(`
     SELECT e.id, e.date, e.start_time, e.payload_json,
@@ -505,6 +688,7 @@ async function getStats(env, headers) {
     if (!competitions[competition]) {
       competitions[competition] = {
         competition,
+        sourceType: event?.source?.type || null,
         played: 0, wins: 0, losses: 0, draws: 0,
         pointsFor: 0, pointsAgainst: 0,
         lsdKnown: 0, lsdAdvantages: 0
@@ -542,9 +726,21 @@ async function getStats(env, headers) {
   }
 
   const played = matches.length;
-  const competitionRows = Object.values(competitions)
+
+  const competitionValues = Object.values(competitions);
+  const positions = await getCompetitionPositions(env, {
+    needCup: competitionValues.some(c =>
+      c.sourceType === 'excel' || standingsKey(c.competition).includes('brnenskypohar')
+    ),
+    needDivision: competitionValues.some(c =>
+      c.sourceType === 'pdf' || standingsKey(c.competition).includes('diviz')
+    )
+  });
+
+  const competitionRows = competitionValues
       .map(c => ({
         ...c,
+        position: standingForCompetition(c.competition, c.sourceType, positions),
         difference: c.pointsFor - c.pointsAgainst,
         winPct: c.played ? Math.round((c.wins / c.played) * 1000) / 10 : 0,
         lsdPct: c.lsdKnown ? Math.round((c.lsdAdvantages / c.lsdKnown) * 1000) / 10 : 0
