@@ -3,16 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
-  <title>CB BUTchers – kalendář</title>
-  <link rel="stylesheet" href="styles.css?v=20261022-1525" />
+  <meta name="color-scheme" content="dark" />
+  <title>CB Butchers – kalendář</title>
+  <link rel="stylesheet" href="styles.css?v=20261104-brand1" />
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Curling • CB BUTchers</p>
-      <h1 id="site-title">Kalendář týmu</h1>
-    </div>
+    <a class="brand-lockup" href="index.html" aria-label="CB Butchers – kalendář">
+      <img class="brand-logo" src="assets/cb-butchers-logo.png" alt="CB Butchers" />
+      <div class="brand-copy">
+        <p class="eyebrow">Curling team</p>
+        <h1 id="site-title">Kalendář týmu</h1>
+      </div>
+    </a>
     <nav class="top-actions" aria-label="Hlavní nabídka">
       <button id="login-btn" type="button" class="menu-button user-login-button">Přihlásit</button>
 
@@ -28,7 +31,7 @@
       <details class="menu-dropdown">
         <summary class="menu-button">Odkazy</summary>
         <div class="menu-popover">
-          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a class="menu-item" href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
           <a class="menu-item" href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
           <a class="menu-item" href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
@@ -128,7 +131,7 @@
         <div id="result-readonly"></div>
         <div id="result-editor" class="result-editor hidden">
           <div class="score-inputs">
-            <label class="field">CB BUTchers
+            <label class="field">CB Butchers
               <input id="result-our-score" type="number" min="0" max="99" inputmode="numeric" />
             </label>
             <span class="score-separator">:</span>
@@ -219,7 +222,7 @@
     <div class="mobile-menu-sheet">
       <div class="mobile-menu-head">
         <div>
-          <p class="eyebrow">CB BUTchers</p>
+          <p class="eyebrow">CB Butchers</p>
           <h2 id="mobile-user-state">Přihlásit</h2>
         </div>
         <button id="mobile-menu-close" type="button" class="mobile-menu-close" aria-label="Zavřít"
@@ -234,7 +237,7 @@
       <section class="mobile-menu-section">
         <h3>Odkazy</h3>
         <div class="mobile-menu-grid">
-          <a href="https://curlingbrno.isportsystem.cz/" target="_blank" rel="noopener noreferrer">Rezervace</a>
+          <a href="https://curlingbrno.isportsystem.cz/form.php?id_form=1" target="_blank" rel="noopener noreferrer">Rezervace</a>
           <a href="https://docs.google.com/spreadsheets/d/1jvL6NmmWnLaP-LxfyRIdEVho0klCpZWEEC0FNNowzUI/edit?usp=sharing" target="_blank" rel="noopener noreferrer">Trénink Excel</a>
           <a href="https://docs.google.com/spreadsheets/d/17rInHjZsT-sP6QSTcK4YhjQqo44TUzMCG7FjMASHjrY/edit?gid=116203339#gid=116203339" target="_blank" rel="noopener noreferrer">Pohár Excel</a>
           <a href="https://vysledky.curling.cz/match/default/played?seasonId=6&amp;leagueId=351" target="_blank" rel="noopener noreferrer">Výsledky divize</a>
@@ -282,6 +285,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20261030-1300" defer></script>
+  <script src="app.js?v=20261104-brand1" defer></script>
 </body>
 </html>

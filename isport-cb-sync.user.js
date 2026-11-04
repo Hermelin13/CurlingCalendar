@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         CB BUTchers – synchronizace iSport
+// @name         CB Butchers – synchronizace iSport
 // @namespace    cb-butchers
 // @version      1.0.0
-// @description  Synchronizuje obsazenost a naše rezervace Curling Brno do kalendáře CB BUTchers.
+// @description  Synchronizuje obsazenost a naše rezervace Curling Brno do kalendáře CB Butchers.
 // @match        https://curlingbrno.isportsystem.cz/*
 // @grant        none
 // @run-at       document-idle
@@ -246,7 +246,7 @@
       <div style="max-width:560px;margin:30px auto;background:#fff;color:#111;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.35);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
           <div>
-            <div style="font-size:12px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.08em;">CB BUTchers</div>
+            <div style="font-size:12px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.08em;">CB Butchers</div>
             <h2 style="margin:3px 0 0;font-size:22px;">Synchronizace iSport</h2>
           </div>
           <button id="cb-sync-close" type="button" style="border:0;background:#eef2f6;border-radius:999px;width:40px;height:40px;font-size:24px;cursor:pointer;">×</button>

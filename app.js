@@ -662,10 +662,10 @@ function exportCalendar() {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//CB BUTchers//Team Calendar//CS',
+    'PRODID:-//CB Butchers//Team Calendar//CS',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:CB BUTchers',
+    'X-WR-CALNAME:CB Butchers',
     'X-WR-TIMEZONE:Europe/Prague'
   ];
   for (const e of events) {
@@ -1218,7 +1218,7 @@ function wireUI() {
 
 async function boot() {
   state.config = await loadJson('config/config.json');
-  document.title=state.config.siteTitle || document.title; $('#site-title').textContent=state.config.siteTitle || 'Kalendář týmu';
+  document.title = state.config.siteTitle || document.title; $('#site-title').textContent = state.config.headerTitle || 'Kalendář týmu';
   wireUI();
   await Promise.all([loadUsers(), restoreLogin()]);
   state.events = (await loadEvents()).filter(event => !event?.cancelled);

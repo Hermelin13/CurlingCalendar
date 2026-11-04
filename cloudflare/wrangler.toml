@@ -4,7 +4,7 @@ compatibility_date = "2026-09-16"
 compatibility_flags = ["global_fetch_strictly_public"]
 
 [vars]
-TEAM_NAME = "CB BUTchers"
+TEAM_NAME = "CB Butchers"
 ALLOWED_ORIGINS = "http://localhost:3000,http://10.0.1.16:3000,https://curlingcalendar.adamdaliborj.workers.dev,https://curlingbrno.isportsystem.cz"
 
 [[d1_databases]]
