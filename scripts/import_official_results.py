@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_FILE = ROOT / "config" / "sources.json"
 DATA_FILE = ROOT / "data" / "events.json"
 
-TEAM = "CB BUTchers"
+TEAM = "CB Butchers"
 
 DATE_RE = re.compile(
     r"(?P<date>\d{1,2}\.\s*\d{1,2}\.\s*\d{4})"
@@ -290,39 +290,61 @@ def load_current_results(api_base: str) -> dict[str, tuple[int, int]]:
     return current
 
 
-def send_discord(webhook_url: str, changed: list[dict], source_name: str) -> None:
-    if not webhook_url or not changed:
+def send_discord(webhook_urls: list[str], changed: list[dict], default_competition: str) -> None:
+    if not changed:
         return
 
-    lines = [f"🥌 **CB Butchers – nový výsledek ({source_name})**"]
+    webhook_urls = [url for url in dict.fromkeys(webhook_urls) if url]
+    if not webhook_urls:
+        print("Discord: není nastaven žádný webhook; notifikaci přeskakuji.")
+        return
+
+    sent = 0
 
     for item in changed:
-        lines.append(
-            f"**CB Butchers {item['ourScore']} : "
-            f"{item['opponentScore']} {item['opponent']}**"
-        )
-        if item.get("date"):
-            lines.append(f"📅 {item['date']}")
+        our_score = int(item["ourScore"])
+        opponent_score = int(item["opponentScore"])
+        opponent = compact(item.get("opponent")) or "Soupeř"
+        competition = compact(item.get("competition")) or default_competition
 
-    message = "\n".join(lines)
-    if len(message) > 1900:
-        message = message[:1890] + "\n…"
+        if our_score > opponent_score:
+            result_line = "✅ **Výhra**"
+        elif our_score < opponent_score:
+            result_line = "❌ **Prohra**"
+        else:
+            result_line = "➖ **Remíza**"
 
-    try:
-        response = requests.post(
-            webhook_url,
-            json={
-                "content": message,
-                "allowed_mentions": {"parse": []},
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        print(f"Discord: odesláno upozornění pro {len(changed)} výsledek/ky.")
-    except Exception as exc:
-        # Výsledek už je bezpečně uložený v D1; chyba Discordu nesmí zrušit import.
-        print(f"VAROVÁNÍ: Discord upozornění se nepodařilo odeslat: {exc}")
+        message = "\n".join([
+            "🥌 **NOVÝ VÝSLEDEK – CB Butchers**",
+            "",
+            f"**CB Butchers {our_score} : {opponent_score} {opponent}**",
+            "",
+            f"🏆 {competition}",
+            "",
+            result_line,
+        ])
 
+        for index, webhook_url in enumerate(webhook_urls, start=1):
+            try:
+                response = requests.post(
+                    webhook_url,
+                    json={
+                        "content": message,
+                        "allowed_mentions": {"parse": []},
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                sent += 1
+            except Exception as exc:
+                # Chyba jednoho serveru nesmí zablokovat druhý webhook ani import výsledků.
+                print(
+                    "VAROVÁNÍ: Discord webhook "
+                    f"#{index} pro {opponent} selhal: {exc}"
+                )
+
+    if sent:
+        print(f"Discord: odesláno {sent} webhook zpráv o výsledcích.")
 
 def main() -> None:
     cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -377,7 +399,10 @@ def main() -> None:
 
     api_base = compact(os.getenv("API_BASE")).rstrip("/")
     import_token = compact(os.getenv("IMPORT_TOKEN"))
-    discord_webhook_url = compact(os.getenv("DISCORD_WEBHOOK_URL"))
+    discord_webhook_urls = [
+        compact(os.getenv("DISCORD_WEBHOOK_URL")),
+        compact(os.getenv("DISCORD_WEBHOOK_URL_B")),
+    ]
 
     if not api_base or not import_token:
         raise RuntimeError("Chybí API_BASE nebo IMPORT_TOKEN.")
@@ -388,9 +413,13 @@ def main() -> None:
     for item in payload:
         incoming = (item["ourScore"], item["opponentScore"])
         if current_results.get(item["eventId"]) != incoming:
+            matched_event = next(
+                (event for event in events if event.get("id") == item["eventId"]),
+                {},
+            )
             changed.append({
                 **item,
-                "date": item.get("date"),
+                "competition": matched_event.get("competition") or "MČR mužů a žen – divize",
             })
 
     res = requests.post(
@@ -412,9 +441,9 @@ def main() -> None:
 
     if changed:
         send_discord(
-            discord_webhook_url,
+            discord_webhook_urls,
             changed,
-            "oficiální výsledky ČSC",
+            "MČR mužů a žen – divize",
         )
     else:
         print("Discord: žádný nový ani změněný výsledek.")

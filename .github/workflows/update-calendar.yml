@@ -77,6 +77,7 @@ jobs:
           API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL_B: ${{ secrets.DISCORD_WEBHOOK_URL_B }}
         run: python scripts/import_google_results.py
 
       - name: Import official results and LSD
@@ -84,11 +85,23 @@ jobs:
           API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL_B: ${{ secrets.DISCORD_WEBHOOK_URL_B }}
         run: python scripts/import_official_results.py
 
-      - name: Commit events.json
+      - name: Notify Discord about standings changes
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL_B: ${{ secrets.DISCORD_WEBHOOK_URL_B }}
+        run: python scripts/notify_standings.py
+
+      - name: Commit generated state
         run: |
-          if git diff --quiet -- data/events.json; then
+          git add data/events.json
+          if [ -f data/discord_standings_state.json ]; then
+            git add data/discord_standings_state.json
+          fi
+
+          if git diff --cached --quiet; then
             echo "Beze zmen."
             exit 0
           fi
@@ -96,6 +109,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/events.json
           git commit -m "Automaticka aktualizace kalendare"
           git push
