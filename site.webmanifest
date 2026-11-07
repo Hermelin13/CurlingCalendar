@@ -1,11 +1,50 @@
 {
+  "id": "./",
   "name": "CB Butchers",
   "short_name": "CB Butchers",
+  "description": "Týmový kalendář, účast a statistiky CB Butchers.",
+  "lang": "cs",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#08090a",
+  "theme_color": "#08090a",
   "icons": [
-    {"src": "assets/favicon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "assets/favicon-512.png", "sizes": "512x512", "type": "image/png"}
+    {
+      "src": "assets/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ],
-  "theme_color": "#0a0a0a",
-  "background_color": "#0a0a0a",
-  "display": "standalone"
+  "shortcuts": [
+    {
+      "name": "Kalendář",
+      "short_name": "Kalendář",
+      "url": "./index.html",
+      "icons": [
+        {
+          "src": "assets/favicon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Statistiky",
+      "short_name": "Statistiky",
+      "url": "./stats.html",
+      "icons": [
+        {
+          "src": "assets/favicon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }

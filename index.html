@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
   <title>CB Butchers – kalendář</title>
-  <link rel="icon" href="favicon.ico" sizes="any">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
-  <link rel="manifest" href="site.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20261104-brand1" />
+  <meta name="theme-color" content="#08090a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CB Butchers" />
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png" />
+  <link rel="manifest" href="site.webmanifest" />
+<link rel="stylesheet" href="styles.css?v=20261104-brand1" />
 </head>
 <body>
   <header class="topbar">
@@ -52,6 +57,7 @@
         <div class="menu-popover menu-popover-right">
           <button id="add-training-btn" type="button" class="menu-item hidden">Přidat trénink</button>
           <button id="sync-data-btn" type="button" class="menu-item hidden">↻ Aktualizovat data</button>
+          <button id="install-app-btn" type="button" class="menu-item hidden">⬇ Nainstalovat aplikaci</button>
           <button id="export-btn" type="button" class="menu-item">Export dat</button>
           <button id="change-pin-btn" type="button" class="menu-item hidden">Změna PINu</button>
           <button id="attendance-table-btn" type="button" class="menu-item">Tabulka účasti</button>
@@ -262,6 +268,7 @@
         <div class="mobile-menu-list">
           <button id="mobile-add-training-btn" type="button" class="mobile-menu-item hidden">Přidat trénink</button>
           <button id="mobile-sync-data-btn" type="button" class="mobile-menu-item hidden">↻ Aktualizovat data</button>
+          <button id="mobile-install-app-btn" type="button" class="mobile-menu-item hidden">⬇ Nainstalovat aplikaci</button>
           <button id="mobile-export-btn" type="button" class="mobile-menu-item">Export dat</button>
           <button id="mobile-change-pin-btn" type="button" class="mobile-menu-item hidden">Změna PINu</button>
           <button id="mobile-attendance-table-btn" type="button" class="mobile-menu-item">Tabulka účasti</button>
@@ -292,6 +299,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20261107-sync1" defer></script>
+  <script src="app.js?v=20261107-pwa1" defer></script>
+  <script src="pwa.js?v=20261107-pwa1" defer></script>
 </body>
 </html>
