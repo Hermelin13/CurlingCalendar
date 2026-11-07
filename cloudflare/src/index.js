@@ -35,6 +35,18 @@ export default {
         if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
         return changePin(request, env, auth.user, cors.headers);
       }
+      if (url.pathname === '/api/sync' && request.method === 'POST') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        if (!isCaptainUser(auth.user)) return json({ error: 'Ruční synchronizaci může spustit jen Adam.' }, 403, cors.headers);
+        return triggerManualSync(env, cors.headers);
+      }
+      if (url.pathname === '/api/sync/status' && request.method === 'GET') {
+        const auth = await requireUser(request, env);
+        if (auth.error) return json({ error: auth.error }, auth.status, cors.headers);
+        if (!isCaptainUser(auth.user)) return json({ error: 'Stav ruční synchronizace může zobrazit jen Adam.' }, 403, cors.headers);
+        return getManualSyncStatus(env, cors.headers);
+      }
       if (url.pathname === '/api/events' && request.method === 'GET') {
         return listEvents(env, cors.headers);
       }
@@ -185,6 +197,108 @@ async function changePin(request, env, authUser, headers) {
   const hash = await hashPin(newPin, salt, env.PIN_PEPPER);
   await db(env).prepare('UPDATE users SET pin_salt=?, pin_hash=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').bind(salt, hash, authUser.id).run();
   return json({ ok: true }, 200, headers);
+}
+
+
+function githubConfig(env) {
+  const repository = String(env.GITHUB_REPOSITORY || '').trim();
+  const token = String(env.GITHUB_TOKEN || '').trim();
+  const workflow = String(env.GITHUB_WORKFLOW || 'update-calendar.yml').trim();
+  const ref = String(env.GITHUB_REF || 'main').trim();
+
+  if (!repository || !repository.includes('/')) {
+    throw new Error('Chybí GITHUB_REPOSITORY ve formátu owner/repository.');
+  }
+  if (!token) throw new Error('Chybí GITHUB_TOKEN.');
+
+  return { repository, token, workflow, ref };
+}
+
+function githubHeaders(token) {
+  return {
+    'Accept': 'application/vnd.github+json',
+    'Authorization': `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2026-03-10',
+    'User-Agent': 'cb-butchers-calendar'
+  };
+}
+
+async function githubRequest(env, path, options = {}) {
+  const cfg = githubConfig(env);
+  const response = await fetch(`https://api.github.com/repos/${cfg.repository}${path}`, {
+    ...options,
+    headers: { ...githubHeaders(cfg.token), ...(options.headers || {}) }
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`GitHub API ${response.status}${body ? `: ${body.slice(0, 300)}` : ''}`);
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function publicWorkflowRun(run) {
+  if (!run) return null;
+  return {
+    id: run.id,
+    status: run.status || null,
+    conclusion: run.conclusion || null,
+    event: run.event || null,
+    createdAt: run.created_at || null,
+    updatedAt: run.updated_at || null,
+    url: run.html_url || null
+  };
+}
+
+async function latestManualSyncRun(env) {
+  const cfg = githubConfig(env);
+  const query = new URLSearchParams({
+    event: 'workflow_dispatch',
+    branch: cfg.ref,
+    per_page: '1'
+  });
+  const data = await githubRequest(
+    env,
+    `/actions/workflows/${encodeURIComponent(cfg.workflow)}/runs?${query.toString()}`,
+    { method: 'GET' }
+  );
+  return Array.isArray(data?.workflow_runs) ? data.workflow_runs[0] || null : null;
+}
+
+async function getManualSyncStatus(env, headers) {
+  try {
+    const run = await latestManualSyncRun(env);
+    return json({ run: publicWorkflowRun(run) }, 200, headers);
+  } catch (error) {
+    return json({ error: error.message }, 502, headers);
+  }
+}
+
+async function triggerManualSync(env, headers) {
+  try {
+    const cfg = githubConfig(env);
+    const latest = await latestManualSyncRun(env);
+    if (latest && (latest.status === 'queued' || latest.status === 'in_progress' || latest.status === 'waiting' || latest.status === 'pending')) {
+      return json({ ok: true, alreadyRunning: true, run: publicWorkflowRun(latest) }, 200, headers);
+    }
+
+    const requestedAt = new Date().toISOString();
+    await githubRequest(
+      env,
+      `/actions/workflows/${encodeURIComponent(cfg.workflow)}/dispatches`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: cfg.ref })
+      }
+    );
+
+    return json({ ok: true, requestedAt }, 202, headers);
+  } catch (error) {
+    return json({ error: error.message }, 502, headers);
+  }
 }
 
 async function requireUser(request, env) {

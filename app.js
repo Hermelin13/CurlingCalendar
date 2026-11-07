@@ -1,4 +1,25 @@
 const SESSION_KEY = 'cbSession';
+const FILTERS_KEY = 'cbCalendarFilters';
+const LAST_MANUAL_SYNC_KEY = 'cbLastManualSync';
+const DEFAULT_FILTERS = ['excel', 'pdf', 'ical', 'manual'];
+
+function loadStoredFilters() {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    if (raw === null) return new Set(DEFAULT_FILTERS);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set(DEFAULT_FILTERS);
+    return new Set(parsed.filter(value => DEFAULT_FILTERS.includes(value)));
+  } catch (_) {
+    return new Set(DEFAULT_FILTERS);
+  }
+}
+
+function saveStoredFilters(filters) {
+  try { localStorage.setItem(FILTERS_KEY, JSON.stringify([...filters])); }
+  catch (_) {}
+}
+
 
 // Přihlášení držíme i po zavření prohlížeče.
 // Zároveň jednorázově převedeme starý token ze sessionStorage,
@@ -20,7 +41,7 @@ const state = {
   token: storedSessionToken,
   selectedEvent: null,
   attendanceSummary: {},
-  filters: new Set(['excel', 'pdf', 'ical', 'manual']),
+  filters: loadStoredFilters(),
 };
 
 const $ = (s) => document.querySelector(s);
@@ -923,6 +944,114 @@ function closeTopMenus() {
   $$('.menu-dropdown[open]').forEach(menu => menu.removeAttribute('open'));
 }
 
+
+function formatManualSyncTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('cs-CZ', {
+    day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(date);
+}
+
+function manualSyncButtons() {
+  return [$('#sync-data-btn'), $('#mobile-sync-data-btn')].filter(Boolean);
+}
+
+function setManualSyncButtonState({ running = false, updatedAt = null } = {}) {
+  const stored = updatedAt || localStorage.getItem(LAST_MANUAL_SYNC_KEY) || '';
+  const formatted = formatManualSyncTime(stored);
+  const label = running
+    ? '↻ Aktualizuji…'
+    : formatted
+      ? `↻ Aktualizovat data · ${formatted}`
+      : '↻ Aktualizovat data';
+
+  manualSyncButtons().forEach(button => {
+    button.disabled = running;
+    button.textContent = label;
+    button.title = formatted ? `Poslední ruční aktualizace: ${formatted}` : 'Spustit ruční synchronizaci dat';
+  });
+}
+
+function rememberManualSync(value) {
+  if (!value) return;
+  try { localStorage.setItem(LAST_MANUAL_SYNC_KEY, value); } catch (_) {}
+  setManualSyncButtonState({ updatedAt: value });
+}
+
+async function reloadSyncedData() {
+  state.events = (await loadEvents()).filter(event => !event?.cancelled);
+  await loadAttendanceSummary();
+  renderAll();
+}
+
+async function refreshManualSyncStatus({ silent = false } = {}) {
+  if (!state.user?.isCaptain || !state.token) return null;
+  try {
+    const body = await api('/api/sync/status', { method: 'GET' });
+    const run = body?.run;
+    if (run?.status === 'completed' && run?.conclusion === 'success') {
+      rememberManualSync(run.updatedAt || run.createdAt);
+    }
+    return run || null;
+  } catch (error) {
+    if (!silent) showToast(`Stav synchronizace: ${error.message}`);
+    return null;
+  }
+}
+
+async function waitForManualSync(requestedAt) {
+  const requestedMs = requestedAt ? new Date(requestedAt).getTime() : Date.now();
+
+  for (let attempt = 0; attempt < 80; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, attempt < 4 ? 1500 : 3000));
+
+    const run = await refreshManualSyncStatus({ silent: true });
+    if (!run) continue;
+
+    const createdMs = new Date(run.createdAt || 0).getTime();
+    // Po dispatchi může GitHub krátce vracet ještě předchozí ruční běh.
+    if (Number.isFinite(requestedMs) && createdMs && createdMs < requestedMs - 10000) continue;
+
+    if (run.status !== 'completed') continue;
+
+    if (run.conclusion === 'success') {
+      rememberManualSync(run.updatedAt || run.createdAt || new Date().toISOString());
+      await reloadSyncedData();
+      showToast('Data byla aktualizována.');
+      return true;
+    }
+
+    throw new Error(`GitHub Action skončila: ${run.conclusion || 'chyba'}.`);
+  }
+
+  throw new Error('Synchronizace stále běží. Zkontroluj ji za chvíli znovu.');
+}
+
+async function startManualSync() {
+  if (!state.user?.isCaptain) return showToast('Ruční synchronizaci může spustit jen Adam.');
+
+  setManualSyncButtonState({ running: true });
+  try {
+    const body = await api('/api/sync', { method: 'POST', body: '{}' });
+    closeTopMenus();
+
+    if (body?.alreadyRunning) {
+      showToast('Synchronizace už běží.');
+      const run = body.run || {};
+      await waitForManualSync(run.createdAt || new Date().toISOString());
+    } else {
+      showToast('Synchronizace spuštěna.');
+      await waitForManualSync(body?.requestedAt || new Date().toISOString());
+    }
+  } catch (error) {
+    showToast(`Synchronizace se nepovedla: ${error.message}`);
+  } finally {
+    setManualSyncButtonState();
+  }
+}
+
 function updateLoginUI() {
   const loggedIn = Boolean(state.user);
   const userMenu = $('#user-menu');
@@ -946,6 +1075,9 @@ function updateLoginUI() {
   $('#mobile-add-training-btn')?.classList.toggle('hidden', !state.user?.canManageTrainings);
 
   const captainOnly = !state.user?.isCaptain;
+  $('#sync-data-btn')?.classList.toggle('hidden', captainOnly);
+  $('#mobile-sync-data-btn')?.classList.toggle('hidden', captainOnly);
+  setManualSyncButtonState();
   $('#match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
   $('#mobile-match-attendance-totals-btn')?.classList.toggle('hidden', captainOnly);
 }
@@ -979,6 +1111,7 @@ function wireUI() {
   const newPinConfirmInput = $('#new-pin-confirm-input');
 
   const addTrainingBtn = $('#add-training-btn');
+  const syncDataBtn = $('#sync-data-btn');
   const trainingDate = $('#training-date');
   const trainingDialog = $('#training-dialog');
   const trainingForm = $('#training-form');
@@ -991,6 +1124,7 @@ function wireUI() {
   const mobileLoginBtn = $('#mobile-login-btn');
   const mobileLogoutBtn = $('#mobile-logout-btn');
   const mobileAddTrainingBtn = $('#mobile-add-training-btn');
+  const mobileSyncDataBtn = $('#mobile-sync-data-btn');
   const mobileExportBtn = $('#mobile-export-btn');
   const mobileChangePinBtn = $('#mobile-change-pin-btn');
   const mobileAttendanceTableBtn = $('#mobile-attendance-table-btn');
@@ -1022,6 +1156,10 @@ function wireUI() {
   };
 
   filterInputs.forEach(input => {
+    input.checked = state.filters.has(input.value);
+  });
+
+  filterInputs.forEach(input => {
     input.addEventListener('change', () => {
       if (input.checked) state.filters.add(input.value);
       else state.filters.delete(input.value);
@@ -1030,6 +1168,7 @@ function wireUI() {
         if (other.value === input.value) other.checked = input.checked;
       });
 
+      saveStoredFilters(state.filters);
       renderAll();
     });
   });
@@ -1092,6 +1231,8 @@ function wireUI() {
     openTrainingDialog();
   };
 
+  syncDataBtn.onclick = startManualSync;
+
   attendanceTableBtn.onclick = () => {
     closeTopMenus();
     openAttendanceOverview();
@@ -1140,6 +1281,11 @@ function wireUI() {
   mobileAddTrainingBtn.onclick = () => {
     closeMobileMenu();
     openTrainingDialog();
+  };
+
+  mobileSyncDataBtn.onclick = () => {
+    closeMobileMenu();
+    startManualSync();
   };
 
   mobileExportBtn.onclick = () => {
@@ -1221,6 +1367,7 @@ async function boot() {
   document.title=state.config.siteTitle || document.title; $('#site-title').textContent=state.config.siteTitle || 'Kalendář týmu';
   wireUI();
   await Promise.all([loadUsers(), restoreLogin()]);
+  if (state.user?.isCaptain) await refreshManualSyncStatus({ silent: true });
   state.events = (await loadEvents()).filter(event => !event?.cancelled);
   await loadAttendanceSummary();
   const firstFuture=state.events.filter(e=>eventDateTime(e)>=new Date()).sort((a,b)=>eventDateTime(a)-eventDateTime(b))[0];
