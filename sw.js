@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cb-butchers-shell-20261107-v1';
+const CACHE_NAME = 'cb-butchers-shell-20261108-v4';
 const CORE_ASSETS = [
   './',
   './index.html',

@@ -537,3 +537,194 @@ body {
   }
   .stats-table { min-width: 880px; }
 }
+
+/* Mobile stats header: keep Calendar/Back button always visible */
+@media (max-width: 760px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    flex-direction: row;
+    width: 100%;
+    max-width: 100%;
+    min-height: 76px;
+    padding: 8px 10px;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .brand-lockup {
+    display: flex;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    align-items: center;
+  }
+
+  .brand-logo {
+    display: block;
+    width: min(38vw, 145px);
+    max-width: 145px;
+    height: auto;
+    max-height: 58px;
+    object-fit: contain;
+    object-position: left center;
+    flex: 0 1 auto;
+  }
+
+  .top-actions {
+    display: flex;
+    width: auto;
+    min-width: max-content;
+    max-width: none;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .top-actions .button-link {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto;
+    min-width: 0;
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: .75rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 390px) {
+  .topbar {
+    padding-inline: 8px;
+    gap: 6px;
+  }
+
+  .brand-logo {
+    width: min(35vw, 128px);
+    max-width: 128px;
+  }
+
+  .top-actions .button-link {
+    padding-inline: 8px;
+    font-size: .7rem;
+  }
+}
+
+@media (max-width: 330px) {
+  .brand-logo {
+    width: 108px;
+  }
+
+  .top-actions .button-link {
+    padding-inline: 7px;
+    font-size: .66rem;
+  }
+}
+
+/* Stats navigation is intentionally NOT .top-actions.
+   Main styles hide .top-actions on mobile for the calendar bottom-sheet menu. */
+.stats-nav-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: auto;
+  min-width: max-content;
+}
+
+.stats-nav-actions .button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 76px;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+    overflow: visible !important;
+  }
+
+  .topbar .brand-lockup {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+
+  .topbar .brand-logo {
+    display: block;
+    width: min(38vw, 145px) !important;
+    max-width: 145px !important;
+    height: auto;
+    max-height: 58px !important;
+    object-fit: contain;
+    object-position: left center;
+  }
+
+  .stats-nav-actions {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative;
+    z-index: 20;
+    width: auto !important;
+    min-width: max-content !important;
+    justify-self: end;
+  }
+
+  .stats-nav-actions .button-link {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 40px;
+    padding: 9px 11px;
+    font-size: .75rem;
+    line-height: 1;
+  }
+}
+
+@media (max-width: 390px) {
+  .topbar {
+    padding-inline: 8px !important;
+    gap: 6px !important;
+  }
+
+  .topbar .brand-logo {
+    width: min(34vw, 126px) !important;
+    max-width: 126px !important;
+  }
+
+  .stats-nav-actions .button-link {
+    padding-inline: 8px;
+    font-size: .7rem;
+  }
+}
+
+@media (max-width: 330px) {
+  .topbar .brand-logo {
+    width: 104px !important;
+  }
+
+  .stats-nav-actions .button-link {
+    padding-inline: 7px;
+    font-size: .66rem;
+  }
+}
+
