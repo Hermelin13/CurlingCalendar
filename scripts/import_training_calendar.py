@@ -16,7 +16,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_FILE = ROOT / "config" / "sources.json"
-TEAM = "CB BUTchers"
+TEAM = "CB Butchers"
 
 WEEKDAYS = {
     "monday": 0, "pondeli": 0,
@@ -560,6 +560,12 @@ def main() -> None:
     cfg = cfg_all.get("trainingAvailability") or {}
     if not cfg:
         raise RuntimeError("V config/sources.json chybí trainingAvailability.")
+
+    # Dočasné vypnutí automatických tréninků z Excel/Google tabulky.
+    # Dokud je enabled=false, skript tabulku vůbec nestahuje ani nic neposílá do API.
+    if cfg.get("enabled") is not True:
+        print("Tréninky z Excel/Google tabulky jsou dočasně vypnuté (trainingAvailability.enabled=false).")
+        return
 
     api_base = compact(os.getenv("API_BASE"))
     import_token = compact(os.getenv("IMPORT_TOKEN"))

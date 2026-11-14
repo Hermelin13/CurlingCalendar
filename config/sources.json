@@ -34,6 +34,7 @@
     "seasonEndDate": "2027-06-30",
     "userAliases": {
       "Niko": "Nikolas"
-    }
+    },
+    "enabled": false
   }
 }

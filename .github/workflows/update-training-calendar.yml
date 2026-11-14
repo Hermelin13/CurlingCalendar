@@ -1,9 +1,7 @@
-name: Synchronizace treninkoveho kalendare
+name: Tréninky z Excelu – dočasně vypnuto
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "23 5 * * *"
 
 jobs:
   sync:
@@ -21,7 +19,7 @@ jobs:
       - name: Instalace requests
         run: pip install requests==2.32.5
 
-      - name: Synchronizace treninku a dochazky
+      - name: Kontrola importu tréninků
         env:
           API_BASE: https://cb-butchers-api.adamdaliborj.workers.dev
           IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
