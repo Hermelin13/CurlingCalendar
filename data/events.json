@@ -590,6 +590,28 @@
     "attendanceEnabled": true
   },
   {
+    "id": "ical-32e0bef6ece0",
+    "type": "event",
+    "title": "Workshop taktika",
+    "team": "CB Butchers",
+    "opponent": null,
+    "date": "2026-12-14",
+    "startTime": "18:30",
+    "endTime": "20:30",
+    "allDay": false,
+    "location": "Posilka, Lazaretní 9, 615 00 Brno-Židenice, Česko",
+    "rink": null,
+    "competition": null,
+    "description": "Workshop na taktiku pořádaný Tomem Ondrouchem a Filipem Gregarem.\nCena 250,- na osobu, junioři zdarma :)",
+    "source": {
+      "type": "ical",
+      "name": "Curling Brno EOS",
+      "url": null
+    },
+    "editable": false,
+    "attendanceEnabled": true
+  },
+  {
     "id": "ical-81a8acc8402e",
     "type": "training",
     "title": "Trénink Roztyly",
